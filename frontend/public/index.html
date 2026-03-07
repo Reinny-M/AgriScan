@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>AgriScan</title>
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --forest:#1b3a1e;--leaf:#2e7d32;--leaf-mid:#388e3c;--leaf-light:#66bb6a;
+  --leaf-pale:#c8e6c9;--soil:#4e342e;--sun:#f9a825;--rust:#c62828;
+  --cream:#f8f5ee;--white:#fff;--text-muted:#7a8a7c;--border:rgba(46,125,50,.15);
+  --gold:#f59e0b;--purple:#7c3aed;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth}
+body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--forest);max-width:430px;margin:0 auto;min-height:100vh;overflow-x:hidden}
+
+/* STATUS */
+.status-bar{background:var(--forest);color:#fff;display:flex;justify-content:space-between;align-items:center;padding:10px 20px 8px;font-size:.72rem;font-weight:600;letter-spacing:.04em}
+.offline-banner{display:none;background:#ef4444;color:#fff;text-align:center;padding:8px;font-size:.78rem;font-weight:600;align-items:center;justify-content:center;gap:6px}
+.offline-banner.show{display:flex}
+
+/* SCREENS */
+.screen{display:none;min-height:100vh;padding-bottom:96px}
+.screen.active{display:block;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* NAV */
+.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:var(--white);border-top:1.5px solid var(--border);display:flex;justify-content:space-around;padding:10px 0 20px;z-index:100;box-shadow:0 -4px 24px rgba(0,0,0,.07)}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border-radius:12px;transition:all .2s;background:none;border:none;font-family:'DM Sans',sans-serif;color:var(--text-muted)}
+.nav-item.active{color:var(--leaf)}
+.nav-icon{font-size:1.25rem}
+.nav-item span{font-size:.66rem;font-weight:600}
+
+/* HOME */
+.home-header{background:linear-gradient(160deg,var(--forest) 0%,var(--leaf-mid) 100%);padding:26px 24px 48px;position:relative;overflow:hidden}
+.home-header::before{content:'';position:absolute;top:-40px;right:-40px;width:180px;height:180px;background:rgba(255,255,255,.06);border-radius:50%}
+.greeting{color:rgba(255,255,255,.7);font-size:.85rem}
+.app-title{font-family:'Fraunces',serif;color:#fff;font-size:1.8rem;font-weight:900}
+.app-title em{color:var(--sun);font-style:normal}
+.header-row{display:flex;align-items:center;justify-content:space-between;margin-top:10px}
+.header-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.15);border-radius:100px;padding:5px 12px;font-size:.73rem;color:rgba(255,255,255,.9);font-weight:500}
+.badge-dot{width:7px;height:7px;background:#69f0ae;border-radius:50%;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.plan-chip{display:inline-flex;align-items:center;gap:5px;border-radius:100px;padding:5px 12px;font-size:.73rem;font-weight:700;cursor:pointer;border:none;font-family:'DM Sans',sans-serif}
+.plan-chip.free{background:rgba(255,255,255,.15);color:#fff}
+.plan-chip.premium{background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff}
+.plan-chip.pro{background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff}
+.home-content{padding:0 20px;margin-top:-24px}
+.card{background:var(--white);border-radius:20px;padding:20px;box-shadow:0 6px 28px rgba(46,125,50,.1);margin-bottom:16px;border:1.5px solid var(--border)}
+.card-title{font-family:'Fraunces',serif;font-size:1.05rem;font-weight:700;margin-bottom:5px}
+.card-sub{color:var(--text-muted);font-size:.82rem;margin-bottom:13px;line-height:1.5}
+.section-title{font-family:'Fraunces',serif;font-size:1rem;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.weather-home-card{background:linear-gradient(135deg,#1565c0,#42a5f5);border-radius:16px;padding:16px 18px;color:#fff;margin-bottom:16px;cursor:pointer;transition:all .2s;display:flex;justify-content:space-between;align-items:center}
+.weather-home-card:hover{transform:translateY(-2px)}
+.scan-limit-bar{background:#fff3e0;border:1.5px solid #ffe082;border-radius:12px;padding:11px 13px;margin-bottom:14px;display:flex;align-items:center;gap:10px}
+.slb-text{font-size:.8rem;color:#92400e;flex:1;line-height:1.4}
+.slb-btn{background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.75rem;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap}
+
+/* BUTTONS */
+.btn-primary{width:100%;background:linear-gradient(135deg,var(--leaf),var(--leaf-mid));color:#fff;border:none;border-radius:14px;padding:14px;font-size:.92rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;box-shadow:0 4px 20px rgba(46,125,50,.3)}
+.btn-primary:hover:not(:disabled){transform:translateY(-2px)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-outline{width:100%;background:var(--cream);border:1.5px solid var(--border);border-radius:14px;padding:12px;font-size:.88rem;font-weight:600;color:var(--forest);cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s}
+.btn-outline:hover{border-color:var(--leaf-light);background:var(--leaf-pale)}
+.btn-gold{width:100%;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:14px;padding:13px;font-size:.92rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;box-shadow:0 4px 20px rgba(245,158,11,.3)}
+.btn-gold:hover{transform:translateY(-2px)}
+.btn-purple{width:100%;background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;border:none;border-radius:14px;padding:13px;font-size:.92rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;box-shadow:0 4px 20px rgba(124,58,237,.3)}
+.btn-purple:hover{transform:translateY(-2px)}
+.btn-call{flex:1;background:var(--leaf);color:#fff;border:none;border-radius:10px;padding:10px;font-size:.82rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .2s}
+.btn-call:hover{background:var(--forest)}
+
+/* SCREEN HEADERS */
+.screen-header{padding:26px 24px 42px;position:relative;overflow:hidden}
+.screen-header h2{font-family:'Fraunces',serif;color:#fff;font-size:1.35rem;font-weight:700}
+.screen-header p{color:rgba(255,255,255,.65);font-size:.82rem;margin-top:4px}
+.header-scan{background:linear-gradient(160deg,var(--forest),var(--leaf-mid))}
+.header-crops{background:linear-gradient(135deg,#4e342e,#795548)}
+.header-weather{background:linear-gradient(160deg,#0d47a1,#1976d2,#42a5f5)}
+.header-shops{background:linear-gradient(135deg,#1b3a1e,#2e7d32)}
+.screen-content{padding:0 20px;margin-top:-22px}
+
+/* SCAN */
+.upload-zone{border:2.5px dashed var(--leaf-pale);border-radius:16px;padding:36px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--cream)}
+.upload-zone:hover{border-color:var(--leaf-light);background:rgba(200,230,201,.2)}
+.upload-zone.has-image{padding:0;border-style:solid;border-color:var(--leaf-light)}
+#previewImg{width:100%;height:210px;object-fit:cover;border-radius:14px;display:none}
+.or-div{display:flex;align-items:center;gap:12px;margin:13px 0;color:var(--text-muted);font-size:.78rem}
+.or-div::before,.or-div::after{content:'';flex:1;height:1px;background:var(--border)}
+.result-card{background:var(--white);border-radius:20px;padding:20px;margin-bottom:16px;box-shadow:0 8px 32px rgba(0,0,0,.08);border:1.5px solid var(--border);display:none}
+.result-card.show{display:block;animation:fadeIn .4s ease}
+.result-disease{font-family:'Fraunces',serif;font-size:1.25rem;font-weight:700}
+.result-badge{display:inline-block;background:var(--leaf-pale);color:var(--leaf);font-size:.73rem;font-weight:600;border-radius:100px;padding:3px 12px;margin-bottom:13px}
+.r-section{margin-bottom:13px}
+.r-label{font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:5px}
+.r-body{font-size:.86rem;line-height:1.65;color:var(--soil)}
+.r-body ul{padding-left:18px}
+.r-body ul li{margin-bottom:4px}
+.sev-bar{display:flex;align-items:center;gap:10px;margin-top:6px}
+.sev-track{flex:1;height:8px;background:var(--leaf-pale);border-radius:100px;overflow:hidden}
+.sev-fill{height:100%;border-radius:100px;transition:width 1s ease}
+.premium-teaser{background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #fde68a;border-radius:14px;padding:14px;margin-top:12px;text-align:center}
+.premium-teaser h4{font-size:.88rem;font-weight:700;color:#92400e;margin-bottom:4px}
+.premium-teaser p{font-size:.78rem;color:#78350f;margin-bottom:10px;line-height:1.5}
+.spinner-wrap{display:none;text-align:center;padding:32px}
+.spinner-wrap.show{display:block}
+.spinner{width:44px;height:44px;border:4px solid var(--leaf-pale);border-top-color:var(--leaf);border-radius:50%;animation:spin .9s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinner-wrap p{color:var(--text-muted);font-size:.85rem}
+
+/* CROPS */
+.crop-detail-card{background:var(--white);border-radius:18px;overflow:hidden;border:1.5px solid var(--border);margin-bottom:13px;transition:all .2s}
+.crop-detail-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.08)}
+.crop-detail-header{display:flex;align-items:center;gap:14px;padding:16px;cursor:pointer}
+.crop-emoji-bg{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;flex-shrink:0}
+.crop-info h3{font-family:'Fraunces',serif;font-size:1rem;font-weight:700}
+.crop-info p{font-size:.78rem;color:var(--text-muted);margin-top:2px}
+.chevron{margin-left:auto;color:var(--text-muted);font-size:1.2rem;transition:transform .2s}
+.crop-detail-card.open .chevron{transform:rotate(90deg)}
+.crop-expand{display:none;border-top:1.5px solid var(--border);padding:16px}
+.crop-detail-card.open .crop-expand{display:block}
+.disease-tag{display:inline-flex;align-items:center;gap:5px;background:#fff3e0;border:1px solid #ffe0b2;color:#e65100;border-radius:100px;padding:4px 11px;font-size:.72rem;font-weight:600;margin:3px 3px 3px 0}
+.tip-item{display:flex;gap:8px;align-items:flex-start;font-size:.82rem;color:var(--soil);margin-bottom:6px;line-height:1.5}
+.tip-dot{width:6px;height:6px;border-radius:50%;background:var(--leaf-light);margin-top:7px;flex-shrink:0}
+
+/* WEATHER */
+.cur-weather{background:var(--white);border-radius:20px;padding:22px;box-shadow:0 8px 32px rgba(13,71,161,.1);border:1.5px solid rgba(66,165,245,.2);margin-bottom:14px;text-align:center}
+.cw-icon{font-size:3.6rem;margin-bottom:6px}
+.cw-temp{font-family:'Fraunces',serif;font-size:3rem;font-weight:900;color:var(--forest)}
+.cw-desc{font-size:.95rem;font-weight:600;color:var(--soil);margin:4px 0}
+.cw-feels{font-size:.8rem;color:var(--text-muted)}
+.cw-meta{display:flex;justify-content:center;gap:18px;margin-top:14px;padding-top:14px;border-top:1.5px solid var(--border)}
+.cw-meta-val{font-weight:700;font-size:1rem;color:var(--forest)}
+.cw-meta-lbl{font-size:.72rem;color:var(--text-muted)}
+.alert-card{border-radius:14px;padding:13px 15px;margin-bottom:10px;display:flex;align-items:flex-start;gap:12px}
+.alert-card.danger{background:#ffebee;border:1.5px solid #ef9a9a}
+.alert-card.warning{background:#fff8e1;border:1.5px solid #ffe082}
+.alert-card.info{background:#e8f5e9;border:1.5px solid #a5d6a7}
+.alert-title{font-size:.87rem;font-weight:700;margin-bottom:3px}
+.alert-card.danger .alert-title{color:var(--rust)}
+.alert-card.warning .alert-title{color:#e65100}
+.alert-card.info .alert-title{color:var(--leaf)}
+.alert-desc{font-size:.8rem;color:var(--soil);line-height:1.5}
+.forecast-scroll{display:flex;gap:10px;overflow-x:auto;padding-bottom:8px}
+.forecast-scroll::-webkit-scrollbar{display:none}
+.fcast-item{background:var(--white);border-radius:14px;padding:12px 14px;text-align:center;min-width:74px;flex-shrink:0;border:1.5px solid var(--border)}
+.fcast-day{font-size:.72rem;font-weight:600;color:var(--text-muted);margin-bottom:5px}
+.fcast-icon{font-size:1.5rem;margin-bottom:5px}
+.fcast-temp{font-size:.87rem;font-weight:700;color:var(--forest)}
+.fcast-rain{font-size:.7rem;color:#1565c0;margin-top:3px}
+
+/* ═══════════════ SHOPS & MAPS ═══════════════ */
+#shopMap{
+  width:100%;height:260px;border-radius:18px;overflow:hidden;
+  border:1.5px solid var(--border);margin-bottom:14px;
+  background:linear-gradient(135deg,#e8f5e9,#c8e6c9);
+  display:flex;align-items:center;justify-content:center;
+}
+.map-loading{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--leaf)}
+.map-controls{display:flex;gap:8px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px}
+.map-controls::-webkit-scrollbar{display:none}
+.map-filter-btn{flex-shrink:0;background:var(--white);border:1.5px solid var(--border);border-radius:100px;padding:6px 14px;font-size:.75rem;font-weight:600;color:var(--forest);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;white-space:nowrap}
+.map-filter-btn.active{background:var(--leaf);color:#fff;border-color:var(--leaf)}
+
+/* Shop cards */
+.shop-card{background:var(--white);border-radius:16px;padding:16px;margin-bottom:12px;border:1.5px solid var(--border);box-shadow:0 2px 12px rgba(0,0,0,.05);transition:all .2s}
+.shop-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.shop-card.sponsored{border-color:#ce93d8}
+.shop-card.featured{border-color:#fbbf24;background:linear-gradient(135deg,rgba(255,251,235,.4),rgba(254,243,199,.2))}
+.sp-badge{display:inline-block;font-size:.67rem;font-weight:700;letter-spacing:.06em;border-radius:100px;padding:2px 10px;margin-bottom:9px;text-transform:uppercase}
+.sp-badge.sponsored{background:#f3e5f5;color:#7b1fa2}
+.sp-badge.featured{background:#fef3c7;color:#92400e}
+.shop-ad-msg{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1px solid #6ee7b7;border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:.8rem;color:#065f46;font-weight:600;display:flex;align-items:center;gap:6px}
+.shop-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.shop-name{font-family:'Fraunces',serif;font-size:1rem;font-weight:700;flex:1}
+.shop-dist{background:var(--leaf-pale);color:var(--leaf);font-size:.72rem;font-weight:700;border-radius:100px;padding:3px 10px;flex-shrink:0}
+.shop-addr{font-size:.8rem;color:var(--text-muted);margin:4px 0 9px}
+.shop-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:11px}
+.shop-tag{background:var(--cream);border:1px solid var(--border);color:#5d4037;border-radius:100px;font-size:.72rem;font-weight:500;padding:3px 10px}
+.shop-rating{display:flex;align-items:center;gap:4px;font-size:.75rem;color:#f59e0b;font-weight:600;margin-bottom:10px}
+.shop-actions{display:flex;gap:8px}
+.btn-dir-small{background:var(--leaf-pale);color:var(--leaf);border:1.5px solid rgba(46,125,50,.2);border-radius:10px;padding:10px 14px;font-size:.82rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.btn-dir-small:hover{background:var(--leaf);color:#fff}
+
+/* ── DIRECTIONS MODAL ── */
+.dir-modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;align-items:flex-end;backdrop-filter:blur(2px)}
+.dir-modal-bg.show{display:flex}
+.dir-modal{background:var(--white);border-radius:24px 24px 0 0;width:100%;max-width:430px;margin:0 auto;animation:slideUp .35s cubic-bezier(.34,1.56,.64,1);max-height:92vh;display:flex;flex-direction:column;overflow:hidden}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+
+/* Map in modal */
+.dir-map-wrap{position:relative;flex-shrink:0;height:240px;background:#e8f5e9}
+#directionsMap{width:100%;height:100%}
+.dir-close-btn{position:absolute;top:12px;right:12px;z-index:10;background:var(--white);border:none;border-radius:50%;width:36px;height:36px;font-size:.9rem;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;color:var(--forest);font-weight:700}
+.dir-close-btn:hover{background:var(--cream)}
+.open-gmaps-btn{position:absolute;bottom:12px;right:12px;z-index:10;background:var(--white);border:none;border-radius:10px;padding:7px 12px;font-size:.73rem;font-weight:700;cursor:pointer;box-shadow:0 2px 12px rgba(0,0,0,.2);color:var(--forest);display:flex;align-items:center;gap:5px}
+.open-gmaps-btn:hover{background:#4285F4;color:#fff}
+
+/* Info panel */
+.dir-info{padding:16px 18px;overflow-y:auto;flex:1}
+.dir-shop-name{font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700;margin-bottom:8px}
+.dir-pills{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.dir-pill{display:inline-flex;align-items:center;gap:5px;border-radius:100px;padding:5px 12px;font-size:.76rem;font-weight:600}
+.dir-pill.green{background:var(--leaf-pale);color:var(--leaf)}
+.dir-pill.blue{background:#dbeafe;color:#1e40af}
+.dir-pill.orange{background:#fff7ed;color:#c2410c}
+
+/* Travel mode */
+.travel-btns{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px}
+.travel-btn{background:var(--cream);border:1.5px solid var(--border);border-radius:10px;padding:8px 4px;font-size:.7rem;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--text-muted)}
+.travel-btn.active{background:var(--leaf-pale);border-color:var(--leaf);color:var(--leaf)}
+.travel-btn:hover{border-color:var(--leaf-light)}
+.travel-btn .ti{font-size:1.3rem}
+
+/* Steps */
+.steps-header{font-family:'Fraunces',serif;font-size:.88rem;font-weight:700;margin-bottom:10px;color:var(--forest)}
+.dir-step{display:flex;gap:11px;padding:10px 0;border-bottom:1px solid var(--border)}
+.dir-step:last-child{border-bottom:none}
+.step-icon{width:30px;height:30px;border-radius:50%;background:var(--leaf-pale);display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0;margin-top:1px}
+.step-body{flex:1}
+.step-instr{font-size:.83rem;color:var(--soil);line-height:1.5}
+.step-meta{font-size:.72rem;color:var(--text-muted);margin-top:3px}
+
+/* Dir action buttons */
+.dir-action-row{display:flex;gap:8px;margin-top:14px;padding-bottom:4px}
+
+/* PREMIUM SCREEN */
+.premium-hero{background:linear-gradient(135deg,#92400e,#d97706,#f59e0b);padding:26px 24px 44px;text-align:center;position:relative;overflow:hidden}
+.premium-hero::before{content:'✨';position:absolute;top:10px;right:20px;font-size:4rem;opacity:.15}
+.premium-content{padding:0 20px;margin-top:-22px}
+.plan-cards{display:flex;flex-direction:column;gap:14px;margin-bottom:20px}
+.plan-card{background:var(--white);border-radius:20px;padding:20px;border:2px solid var(--border);transition:all .2s;cursor:pointer;position:relative}
+.plan-card.selected{border-color:var(--gold);box-shadow:0 8px 28px rgba(245,158,11,.2)}
+.plan-card.popular{border-color:var(--gold)}
+.popular-badge{position:absolute;top:-10px;right:16px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:.7rem;font-weight:700;border-radius:100px;padding:3px 12px}
+.plan-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.plan-name{font-family:'Fraunces',serif;font-size:1.1rem;font-weight:700}
+.plan-price-amount{font-family:'Fraunces',serif;font-size:1.5rem;font-weight:900;color:var(--forest)}
+.plan-price-period{font-size:.75rem;color:var(--text-muted)}
+.plan-features{list-style:none;display:flex;flex-direction:column;gap:7px}
+.plan-features li{display:flex;align-items:center;gap:8px;font-size:.83rem;color:var(--soil)}
+.plan-features li.locked{color:var(--text-muted)}
+.revenue-box{background:linear-gradient(135deg,#ecfdf5,#d1fae5);border:1.5px solid #6ee7b7;border-radius:16px;padding:18px;margin-bottom:16px}
+.revenue-box h4{font-family:'Fraunces',serif;font-size:1rem;font-weight:700;color:#065f46;margin-bottom:10px}
+.rev-row{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;margin-bottom:8px}
+.rev-val{font-weight:700;color:var(--forest)}
+.rev-total{border-top:1.5px solid #6ee7b7;padding-top:10px;margin-top:4px}
+.rev-total .rev-val{color:#065f46;font-size:1rem}
+.ad-pkg-card{background:var(--white);border-radius:16px;padding:16px;border:1.5px solid var(--border);margin-bottom:12px;transition:all .2s;cursor:pointer;position:relative}
+.ad-pkg-card:hover{border-color:var(--gold);transform:translateY(-1px)}
+.ad-pkg-card.popular-ad{border-color:#f59e0b}
+.ad-pkg-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.ad-pkg-name{font-weight:700;font-size:.92rem}
+.ad-pkg-price{font-family:'Fraunces',serif;font-size:1.1rem;font-weight:900;color:var(--forest)}
+.ad-pkg-dur{font-size:.7rem;color:var(--text-muted)}
+.ad-pkg-feat span{font-size:.78rem;color:var(--soil);display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.offline-badge{display:inline-flex;align-items:center;gap:5px;background:#dcfce7;color:#166534;border-radius:100px;padding:4px 12px;font-size:.73rem;font-weight:600;margin-bottom:12px}
+
+/* MODALS */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;align-items:flex-end}
+.modal-bg.show{display:flex}
+.modal{background:var(--white);border-radius:24px 24px 0 0;padding:26px 22px 40px;width:100%;max-width:430px;margin:0 auto;animation:slideUp .3s ease;max-height:90vh;overflow-y:auto}
+.modal h3{font-family:'Fraunces',serif;font-size:1.2rem;font-weight:700;margin-bottom:4px}
+.modal p{font-size:.82rem;color:var(--text-muted);margin-bottom:18px}
+.input-group{margin-bottom:13px}
+.input-group label{font-size:.8rem;font-weight:600;display:block;margin-bottom:6px}
+.input-group input,.input-group select{width:100%;border:1.5px solid var(--border);border-radius:12px;padding:11px 14px;font-size:.9rem;font-family:'DM Sans',sans-serif;color:var(--forest);outline:none;background:var(--cream)}
+.input-group input:focus,.input-group select:focus{border-color:var(--leaf-light);background:#fff}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--forest);color:#fff;border-radius:100px;padding:10px 20px;font-size:.82rem;font-weight:500;opacity:0;transition:all .3s;z-index:600;white-space:nowrap;pointer-events:none;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.loading-row{text-align:center;padding:36px;color:var(--text-muted);font-size:.88rem}
+</style>
+</head>
+<body>
+
+<div class="status-bar">
+  <span id="clock">9:41</span>
+  <div style="display:flex;gap:6px">📶 🔋</div>
+</div>
+<div class="offline-banner" id="offlineBanner">📴 You're offline — showing cached data</div>
+
+<!-- ══════════ HOME ══════════ -->
+<div class="screen active" id="screen-home">
+  <div class="home-header">
+    <div class="greeting" id="greeting">Good morning 👋</div>
+    <div class="app-title">Agri<em>Scan</em></div>
+    <div class="header-row">
+      <div class="header-badge"><span class="badge-dot"></span> AI Disease Detection</div>
+      <button class="plan-chip free" id="planChip" onclick="goTo('premium')">⭐ Free</button>
+    </div>
+  </div>
+  <div class="home-content">
+    <div id="homeLimitBar"></div>
+    <div class="card">
+      <div class="card-title">🔍 Scan a Plant Leaf</div>
+      <div class="card-sub">Photo a diseased leaf — Gemini AI diagnoses it instantly.</div>
+      <button class="btn-primary" onclick="goTo('scan')">📷 Start Scanning</button>
+    </div>
+    <div class="weather-home-card" onclick="goTo('weather')">
+      <div>
+        <div style="font-size:.75rem;opacity:.8">📍 Your Location</div>
+        <div id="homeTemp" style="font-family:'Fraunces',serif;font-size:2rem;font-weight:700">--°C</div>
+        <div id="homeDesc" style="font-size:.8rem;opacity:.9">Loading…</div>
+      </div>
+      <div style="text-align:right">
+        <div id="homeIcon" style="font-size:2.6rem">⏳</div>
+        <div id="homeAlert" style="background:rgba(255,255,255,.2);border-radius:100px;padding:3px 10px;font-size:.7rem;font-weight:600;margin-top:4px">…</div>
+      </div>
+    </div>
+    <div class="section-title">🌾 Crop Library</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <div class="card" style="padding:14px;text-align:center;cursor:pointer;margin-bottom:0" onclick="goTo('crops')"><span style="font-size:1.8rem">🌽</span><div style="font-size:.82rem;font-weight:600;margin-top:6px">Maize</div><div style="font-size:.72rem;color:var(--text-muted)" id="hc0">8 diseases</div></div>
+      <div class="card" style="padding:14px;text-align:center;cursor:pointer;margin-bottom:0" onclick="goTo('crops')"><span style="font-size:1.8rem">🍅</span><div style="font-size:.82rem;font-weight:600;margin-top:6px">Tomatoes</div><div style="font-size:.72rem;color:var(--text-muted)" id="hc1">12 diseases</div></div>
+      <div class="card" style="padding:14px;text-align:center;cursor:pointer;margin-bottom:0" onclick="goTo('crops')"><span style="font-size:1.8rem">🥔</span><div style="font-size:.82rem;font-weight:600;margin-top:6px">Potatoes</div><div style="font-size:.72rem;color:var(--text-muted)" id="hc2">7 diseases</div></div>
+      <div class="card" style="padding:14px;text-align:center;cursor:pointer;margin-bottom:0" onclick="goTo('crops')"><span style="font-size:1.8rem">🫘</span><div style="font-size:.82rem;font-weight:600;margin-top:6px">Beans</div><div style="font-size:.72rem;color:var(--text-muted)" id="hc3">6 diseases</div></div>
+    </div>
+    <div class="section-title">🏪 Nearest Agro-Vet</div>
+    <div id="homeShop"><div style="padding:16px 0;font-size:.82rem;color:var(--text-muted)">📍 Finding shops near you…</div></div>
+    <div class="card" style="border-color:#fde68a;background:linear-gradient(135deg,#fffbeb,#fef3c7)">
+      <div style="display:flex;gap:12px;align-items:center">
+        <span style="font-size:2rem">⭐</span>
+        <div>
+          <div style="font-family:'Fraunces',serif;font-weight:700;font-size:.95rem;color:#92400e">Upgrade to Premium</div>
+          <div style="font-size:.78rem;color:#78350f;margin-top:2px">Unlimited scans · Offline mode · Full treatment plans</div>
+        </div>
+      </div>
+      <button class="btn-gold" style="margin-top:12px;padding:11px" onclick="goTo('premium')">View Plans — from $2/month</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ SCAN ══════════ -->
+<div class="screen" id="screen-scan">
+  <div class="screen-header header-scan"><h2>📷 Disease Scanner</h2><p>Upload or photograph a plant leaf</p></div>
+  <div class="screen-content">
+    <div class="card">
+      <div id="scanLimitBanner"></div>
+      <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+        <span style="font-size:2.8rem;margin-bottom:10px;display:block">🌿</span>
+        <div style="font-weight:600;font-size:.92rem;margin-bottom:4px">Tap to upload a leaf photo</div>
+        <div style="color:var(--text-muted);font-size:.78rem">JPG, PNG · Max 10MB</div>
+        <img id="previewImg" alt="Preview"/>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFile(event)">
+      <div class="or-div">or</div>
+      <button class="btn-outline" onclick="document.getElementById('camInput').click()">📸 Open Camera
+        <input type="file" id="camInput" accept="image/*" capture="environment" style="display:none" onchange="handleFile(event)">
+      </button>
+      <button class="btn-primary" id="analyzeBtn" style="margin-top:12px" disabled onclick="analyzeImage()">🧠 Analyze with Gemini AI</button>
+    </div>
+    <div class="spinner-wrap" id="scanSpinner"><div class="spinner"></div><p>Analyzing with Gemini AI…</p></div>
+    <div class="result-card" id="resultCard"><div id="resultContent"></div></div>
+  </div>
+</div>
+
+<!-- ══════════ CROPS ══════════ -->
+<div class="screen" id="screen-crops">
+  <div class="screen-header header-crops"><h2>📚 Crop Knowledge Library</h2><p>Diseases, tips &amp; care guides</p></div>
+  <div class="screen-content"><div id="cropsContainer"><div class="loading-row card">🌱 Loading…</div></div></div>
+</div>
+
+<!-- ══════════ WEATHER ══════════ -->
+<div class="screen" id="screen-weather">
+  <div class="screen-header header-weather"><h2>🌦️ Weather &amp; Crop Advice</h2><p>Stay ahead of weather threats</p></div>
+  <div class="screen-content"><div id="weatherContainer"><div class="loading-row card">⛅ Fetching weather…</div></div></div>
+</div>
+
+<!-- ══════════ SHOPS ══════════ -->
+<div class="screen" id="screen-shops">
+  <div class="screen-header header-shops"><h2>📍 Agro-Vet Shops</h2><p>Find medicine &amp; get directions</p></div>
+  <div class="screen-content">
+
+    <!-- Filter chips -->
+    <div class="map-controls">
+      <button class="map-filter-btn active" onclick="filterShops('all',this)">🏪 All</button>
+      <button class="map-filter-btn" onclick="filterShops('fungicides',this)">🧪 Fungicides</button>
+      <button class="map-filter-btn" onclick="filterShops('seeds',this)">🌱 Seeds</button>
+      <button class="map-filter-btn" onclick="filterShops('fertilizers',this)">💊 Fertilizers</button>
+      <button class="map-filter-btn" onclick="filterShops('featured',this)">⭐ Featured</button>
+    </div>
+
+    <!-- Google Map -->
+    <div id="shopMap">
+      <div class="map-loading">
+        <span style="font-size:2rem">🗺️</span>
+        <span style="font-weight:600;font-size:.88rem">Loading map…</span>
+      </div>
+    </div>
+
+    <!-- Shop list -->
+    <div id="shopsContainer"><div class="loading-row">📍 Finding shops near you…</div></div>
+
+    <!-- Advertise CTA -->
+    <div class="card" style="border-color:#ce93d8;background:linear-gradient(135deg,rgba(243,229,245,.4),rgba(252,228,236,.2))">
+      <div style="font-family:'Fraunces',serif;font-weight:700;font-size:1rem;margin-bottom:4px">🏪 Own an Agro-Vet Shop?</div>
+      <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:12px;line-height:1.5">Advertise to thousands of farmers nearby. From $10/month.</div>
+      <button class="btn-purple" style="padding:11px" onclick="openModal('advertiseModal')">📣 Advertise My Shop</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PREMIUM ══════════ -->
+<div class="screen" id="screen-premium">
+  <div class="premium-hero"><h2>⭐ Upgrade AgriScan</h2><p>Unlimited scans · Offline mode · Full treatment plans</p></div>
+  <div class="premium-content">
+    <div class="plan-cards">
+      <div class="plan-card" id="pc-free" onclick="selectPlan('free')">
+        <div class="plan-header">
+          <div><div class="plan-name">🌱 Basic</div><div style="font-size:.75rem;color:var(--text-muted);margin-top:2px">For occasional use</div></div>
+          <div><div style="font-family:'Fraunces',serif;font-size:1.3rem;font-weight:900;color:var(--leaf)">Free</div></div>
+        </div>
+        <ul class="plan-features">
+          <li>✅ 3 scans per day</li><li>✅ Basic disease name &amp; cause</li>
+          <li>✅ Crop library</li><li>✅ Weather alerts</li>
+          <li class="locked">🔒 Full treatment plans</li>
+          <li class="locked">🔒 Offline mode</li><li class="locked">🔒 Scan history</li>
+        </ul>
+      </div>
+      <div class="plan-card popular selected" id="pc-premium" onclick="selectPlan('premium')">
+        <div class="popular-badge">⭐ Most Popular</div>
+        <div class="plan-header">
+          <div><div class="plan-name">🌟 Premium</div><div style="font-size:.75rem;color:var(--text-muted);margin-top:2px">For active farmers</div></div>
+          <div style="text-align:right"><div class="plan-price-amount">$2</div><div class="plan-price-period">per month</div></div>
+        </div>
+        <ul class="plan-features">
+          <li>✅ Unlimited scans</li><li>✅ Full treatment plans</li>
+          <li>✅ Advanced disease detection</li><li>✅ 7-day weather forecast</li>
+          <li>✅ Full scan history</li><li>✅ Priority AI response</li>
+          <li class="locked">🔒 Offline mode</li>
+        </ul>
+        <div style="margin-top:12px;background:#ecfdf5;border-radius:10px;padding:8px 12px;font-size:.78rem;color:#065f46;font-weight:600;text-align:center">
+          💰 100,000 farmers × $2 = <strong>$200,000/month</strong>
+        </div>
+      </div>
+      <div class="plan-card" id="pc-pro" onclick="selectPlan('pro')">
+        <div class="plan-header">
+          <div><div class="plan-name">🚀 Pro</div><div style="font-size:.75rem;color:var(--text-muted);margin-top:2px">For serious farmers &amp; co-ops</div></div>
+          <div style="text-align:right"><div class="plan-price-amount">$5</div><div class="plan-price-period">per month</div></div>
+        </div>
+        <ul class="plan-features">
+          <li>✅ Everything in Premium</li><li>✅ 📴 Full offline mode</li>
+          <li>✅ Export PDF reports</li><li>✅ Multi-farm management</li>
+          <li>✅ SMS disease alerts</li><li>✅ API access</li>
+        </ul>
+      </div>
+    </div>
+    <div class="revenue-box">
+      <h4>💰 Revenue Potential Calculator</h4>
+      <div class="rev-row" style="margin-bottom:12px">
+        <span style="color:var(--soil);font-size:.83rem">Farmers on Premium:</span>
+        <input type="range" min="1000" max="500000" step="1000" value="100000" id="revSlider" oninput="updateRevCalc()" style="width:130px;accent-color:var(--leaf)">
+      </div>
+      <div class="rev-row"><span style="color:var(--soil)">👨‍🌾 Premium farmers (×$2):</span><span class="rev-val" id="revFarmers">100,000</span></div>
+      <div class="rev-row"><span style="color:var(--soil)">🏪 Shop ads (est.):</span><span class="rev-val" id="revAds">$5,000</span></div>
+      <div class="rev-row rev-total"><span style="font-weight:700;color:var(--soil)">🏦 Total Monthly:</span><span class="rev-val" id="revTotal">$205,000</span></div>
+    </div>
+    <div class="section-title">📣 Shop Advertising Packages</div>
+    <div class="ad-pkg-card"><div class="ad-pkg-top"><div><div class="ad-pkg-name">📋 Basic Listing</div><div class="ad-pkg-dur">30 days</div></div><div><div class="ad-pkg-price">$10</div><div style="font-size:.7rem;color:var(--text-muted)">/month</div></div></div><div class="ad-pkg-feat"><span>✅ Listed in nearby shops</span><span>✅ Distance &amp; phone shown</span></div></div>
+    <div class="ad-pkg-card popular-ad" style="position:relative">
+      <div style="position:absolute;top:-10px;right:12px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;font-size:.67rem;font-weight:700;border-radius:100px;padding:3px 10px">⭐ Popular</div>
+      <div class="ad-pkg-top"><div><div class="ad-pkg-name">🌟 Featured Listing</div><div class="ad-pkg-dur">30 days</div></div><div><div class="ad-pkg-price">$25</div><div style="font-size:.7rem;color:var(--text-muted)">/month</div></div></div>
+      <div class="ad-pkg-feat"><span>✅ Top of results + Sponsored badge</span><span>✅ Custom ad message to farmers</span></div>
+    </div>
+    <div class="ad-pkg-card"><div class="ad-pkg-top"><div><div class="ad-pkg-name">🚀 Premium Ad</div><div class="ad-pkg-dur">30 days</div></div><div><div class="ad-pkg-price">$50</div><div style="font-size:.7rem;color:var(--text-muted)">/month</div></div></div><div class="ad-pkg-feat"><span>✅ Homepage banner</span><span>✅ Push notifications to farmers</span><span>✅ Analytics dashboard</span></div></div>
+    <button class="btn-gold" id="upgradeBtn" style="margin-top:8px" onclick="upgradePlan()">⭐ Upgrade to Premium — $2/month</button>
+    <button class="btn-outline" style="margin-top:10px;margin-bottom:24px" onclick="goTo('home')">Maybe later</button>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <button class="nav-item active" id="nav-home" onclick="goTo('home')"><span class="nav-icon">🏠</span><span>Home</span></button>
+  <button class="nav-item" id="nav-scan" onclick="goTo('scan')"><span class="nav-icon">📷</span><span>Scan</span></button>
+  <button class="nav-item" id="nav-crops" onclick="goTo('crops')"><span class="nav-icon">📚</span><span>Crops</span></button>
+  <button class="nav-item" id="nav-weather" onclick="goTo('weather')"><span class="nav-icon">🌦️</span><span>Weather</span></button>
+  <button class="nav-item" id="nav-premium" onclick="goTo('premium')"><span class="nav-icon">⭐</span><span>Premium</span></button>
+</nav>
+
+<!-- ════ DIRECTIONS MODAL ════ -->
+<div class="dir-modal-bg" id="directionsModal">
+  <div class="dir-modal">
+    <!-- Map area -->
+    <div class="dir-map-wrap">
+      <div id="directionsMap"></div>
+      <button class="dir-close-btn" onclick="closeDirections()">✕</button>
+      <button class="open-gmaps-btn" id="openGmapsBtn" onclick="openInGoogleMaps()">
+        🗺️ Open in Maps
+      </button>
+    </div>
+    <!-- Info panel -->
+    <div class="dir-info">
+      <div class="dir-shop-name" id="dirShopName">Loading…</div>
+      <div class="dir-pills">
+        <div class="dir-pill green">📍 <span id="dirDist">--</span></div>
+        <div class="dir-pill blue">⏱️ <span id="dirTime">--</span></div>
+        <div class="dir-pill orange" id="dirOpenStatus" style="display:none">🕐 Open now</div>
+      </div>
+      <!-- Travel mode -->
+      <div class="travel-btns">
+        <button class="travel-btn active" id="tm-DRIVING" onclick="setTravelMode('DRIVING')"><span class="ti">🚗</span>Drive</button>
+        <button class="travel-btn" id="tm-WALKING" onclick="setTravelMode('WALKING')"><span class="ti">🚶</span>Walk</button>
+        <button class="travel-btn" id="tm-BICYCLING" onclick="setTravelMode('BICYCLING')"><span class="ti">🚲</span>Cycle</button>
+        <button class="travel-btn" id="tm-TRANSIT" onclick="setTravelMode('TRANSIT')"><span class="ti">🚌</span>Transit</button>
+      </div>
+      <!-- Turn-by-turn steps -->
+      <div class="steps-header">🗺️ Turn-by-Turn Directions</div>
+      <div id="dirSteps"><div class="loading-row" style="padding:16px"><div class="spinner" style="width:30px;height:30px;margin:0 auto 8px"></div>Calculating route…</div></div>
+      <!-- Action buttons -->
+      <div class="dir-action-row">
+        <button class="btn-primary" style="padding:12px" onclick="openInGoogleMaps()">🗺️ Navigate in Google Maps</button>
+        <button class="btn-call" style="border-radius:10px;padding:12px 16px;flex-shrink:0" id="dirCallBtn">📞 Call</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAYMENT MODAL -->
+<div class="modal-bg" id="paymentModal">
+  <div class="modal">
+    <div style="text-align:center;margin-bottom:18px">
+      <div style="font-size:2.4rem">💳</div>
+      <h3 id="payPlanName" style="margin-top:6px">⭐ Premium Plan</h3>
+      <p>Choose your payment method · <strong id="payAmount">$2/month</strong></p>
+    </div>
+    <div style="background:#ecfdf5;border:1.5px solid #6ee7b7;border-radius:16px;padding:16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:1.6rem">📱</span>
+        <div><div style="font-weight:700;font-size:.92rem;color:#065f46">M-Pesa STK Push</div><div style="font-size:.75rem;color:#047857">Kenya · Instant · No card needed</div></div>
+      </div>
+      <div class="input-group" style="margin-bottom:10px"><label style="color:#065f46">Phone Number</label><input id="mpesaPhone" placeholder="0712 345 678" type="tel"/></div>
+      <button id="mpesaBtn" class="btn-primary" style="background:linear-gradient(135deg,#059669,#047857)" onclick="payWithMpesa()">📱 Pay with M-Pesa</button>
+    </div>
+    <div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:16px;padding:16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <span style="font-size:1.6rem">💳</span>
+        <div><div style="font-weight:700;font-size:.92rem;color:#1e40af">Card / Bank / Mobile Money</div><div style="font-size:.75rem;color:#1d4ed8">All Africa · Visa · Mastercard · MTN · Airtel</div></div>
+      </div>
+      <div class="input-group" style="margin-bottom:10px"><label style="color:#1e40af">Email Address</label><input id="flwEmail" placeholder="your@email.com" type="email"/></div>
+      <button id="flwBtn" class="btn-primary" style="background:linear-gradient(135deg,#1d4ed8,#1e40af)" onclick="payWithFlutterwave()">💳 Pay with Card / Bank</button>
+    </div>
+    <div style="text-align:center;font-size:.75rem;color:var(--text-muted);margin-bottom:12px">🔒 Secured by M-Pesa Daraja &amp; Flutterwave · Cancel anytime</div>
+    <button class="btn-outline" onclick="closeModal('paymentModal')">Cancel</button>
+  </div>
+</div>
+
+<!-- REGISTER MODAL -->
+<div class="modal-bg" id="registerModal">
+  <div class="modal">
+    <h3>👤 Welcome, Farmer!</h3>
+    <p>Save your scan history and get personalised advice.</p>
+    <div class="input-group"><label>Full Name</label><input id="regName" placeholder="e.g. John Kamau"/></div>
+    <div class="input-group"><label>Phone Number</label><input id="regPhone" placeholder="+254 7XX XXX XXX" type="tel"/></div>
+    <div class="input-group"><label>Location (optional)</label><input id="regLocation" placeholder="e.g. Nakuru, Kenya"/></div>
+    <button class="btn-primary" onclick="registerFarmer()">✅ Save &amp; Continue</button>
+    <button class="btn-outline" style="margin-top:10px" onclick="closeModal('registerModal')">Skip for now</button>
+  </div>
+</div>
+
+<!-- ADVERTISE MODAL -->
+<div class="modal-bg" id="advertiseModal">
+  <div class="modal">
+    <h3>📣 Advertise Your Shop</h3>
+    <p>Reach farmers near you. Packages from $10/month.</p>
+    <div class="input-group"><label>Shop Name</label><input id="adShopName" placeholder="e.g. GreenGrow Agro-Vet"/></div>
+    <div class="input-group"><label>Phone Number</label><input id="adPhone" placeholder="+254 7XX XXX XXX" type="tel"/></div>
+    <div class="input-group"><label>Address</label><input id="adAddress" placeholder="e.g. Main Market Road, Nakuru"/></div>
+    <div class="input-group"><label>Ad Message</label><input id="adMessage" placeholder='"Buy fungicide here — 2 km away"'/></div>
+    <div class="input-group"><label>Package</label>
+      <select id="adPackage">
+        <option value="basic_ad">📋 Basic Listing — $10/month</option>
+        <option value="featured_ad" selected>🌟 Featured Listing — $25/month</option>
+        <option value="premium_ad">🚀 Premium Ad — $50/month</option>
+      </select>
+    </div>
+    <button class="btn-gold" id="adSubmitBtn" onclick="submitShopAd()">💳 Continue to Payment</button>
+    <div id="adPaySection" style="display:none;margin-top:14px">
+      <div style="font-weight:700;font-size:.88rem;margin-bottom:10px" id="adPayPkg">⭐ Featured — $25/month</div>
+      <div style="background:#ecfdf5;border:1.5px solid #6ee7b7;border-radius:14px;padding:14px;margin-bottom:10px">
+        <div style="font-weight:700;font-size:.85rem;color:#065f46;margin-bottom:8px">📱 M-Pesa</div>
+        <div class="input-group" style="margin-bottom:8px"><label style="color:#065f46">M-Pesa Phone</label><input id="adPhoneMpesa" placeholder="0712 345 678" type="tel"/></div>
+        <button id="mpesaShopBtn" class="btn-primary" style="background:linear-gradient(135deg,#059669,#047857);padding:11px" onclick="payWithMpesa(true)">📱 Pay with M-Pesa</button>
+      </div>
+      <div style="background:#eff6ff;border:1.5px solid #93c5fd;border-radius:14px;padding:14px">
+        <div style="font-weight:700;font-size:.85rem;color:#1e40af;margin-bottom:8px">💳 Card / Other Mobile Money</div>
+        <div class="input-group" style="margin-bottom:8px"><label style="color:#1e40af">Email</label><input id="adEmail" placeholder="shop@email.com" type="email"/></div>
+        <button id="flwShopBtn" class="btn-primary" style="background:linear-gradient(135deg,#1d4ed8,#1e40af);padding:11px" onclick="payWithFlutterwave(true)">💳 Pay with Card / Bank</button>
+      </div>
+    </div>
+    <button class="btn-outline" style="margin-top:10px" onclick="closeModal('advertiseModal')">Cancel</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+const BASE_URL = '';
+let farmer = JSON.parse(localStorage.getItem('agriscan_farmer') || 'null');
+let subscription = JSON.parse(localStorage.getItem('agriscan_sub') || 'null');
+let userLat = null, userLon = null;
+let selectedB64 = null, selectedMime = null;
+let selectedPlan = 'premium';
+let scanCount = parseInt(localStorage.getItem('agriscan_scans_today') || '0');
+const FREE_LIMIT = 3;
+
+// Maps state — Leaflet + OpenStreetMap
+let mapsApiKey = ''; // Optional: OpenRouteService key for turn-by-turn
+let googleMap = null;       // reused as Leaflet map instance
+let gMarkers = [];
+let allShopsData = [];
+let activeShop = null;
+let currentTravelMode = 'DRIVING';
+let directionsMapObj = null;
+let directionsService = null;   // unused (kept for compat)
+let directionsRenderer = null;  // unused (kept for compat)
+let mapsLoaded = false;
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+window.addEventListener('online',  () => document.getElementById('offlineBanner').classList.remove('show'));
+window.addEventListener('offline', () => document.getElementById('offlineBanner').classList.add('show'));
+if (!navigator.onLine) document.getElementById('offlineBanner').classList.add('show');
+
+function checkScanDate() {
+  const today = new Date().toDateString();
+  if (localStorage.getItem('agriscan_scan_date') !== today) {
+    localStorage.setItem('agriscan_scan_date', today);
+    localStorage.setItem('agriscan_scans_today', '0');
+    scanCount = 0;
+  }
+}
+function isPremium() {
+  if (!subscription) return false;
+  return ['premium','pro'].includes(subscription.plan_id) && subscription.status === 'active' && new Date(subscription.expires_at) > new Date();
+}
+function isPro() { return subscription?.plan_id === 'pro' && isPremium(); }
+function scansLeft() { return isPremium() ? 999 : Math.max(0, FREE_LIMIT - scanCount); }
+
+function updatePlanUI() {
+  const chip = document.getElementById('planChip');
+  if (isPro())          { chip.className = 'plan-chip pro';     chip.textContent = '🚀 Pro'; }
+  else if (isPremium()) { chip.className = 'plan-chip premium'; chip.textContent = '⭐ Premium'; }
+  else                  { chip.className = 'plan-chip free';    chip.textContent = '⭐ Free'; }
+  renderLimitBars();
+}
+
+function renderLimitBars() {
+  const left = scansLeft();
+  const html = isPremium() ? '' : left > 0
+    ? `<div class="scan-limit-bar"><span>📊</span><div class="slb-text"><strong>${left} free scan${left!==1?'s':''} left today.</strong> Upgrade for unlimited.</div><button class="slb-btn" onclick="goTo('premium')">Upgrade</button></div>`
+    : `<div class="scan-limit-bar" style="background:#ffebee;border-color:#ef9a9a"><span>🚫</span><div class="slb-text" style="color:var(--rust)"><strong>Daily limit reached.</strong> Upgrade for unlimited.</div><button class="slb-btn" style="background:var(--rust)" onclick="goTo('premium')">Upgrade</button></div>`;
+  const hb = document.getElementById('homeLimitBar'); if (hb) hb.innerHTML = html;
+  const sb = document.getElementById('scanLimitBanner');
+  if (sb) sb.innerHTML = (left === 0 && !isPremium())
+    ? `<div style="background:#ffebee;border:1.5px solid #ef9a9a;border-radius:12px;padding:12px;margin-bottom:12px;text-align:center"><div style="font-weight:700;color:var(--rust);margin-bottom:6px">🚫 Daily limit reached</div><div style="font-size:.8rem;color:var(--soil);margin-bottom:10px">Free plan: 3 scans/day. Upgrade for unlimited.</div><button class="btn-gold" style="padding:10px" onclick="goTo('premium')">⭐ Upgrade — $2/month</button></div>` : '';
+}
+
+window.addEventListener('load', async () => {
+  checkScanDate();
+  updateClock(); setInterval(updateClock, 30000);
+  updateGreeting(); updatePlanUI(); loadCrops();
+  checkFlutterwaveReturn();
+  if (!farmer) setTimeout(() => openModal('registerModal'), 1800);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  // Fetch Maps API key from backend, then get location
+  await fetchMapsKey();
+  getLocation();
+});
+
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clock').textContent = n.getHours().toString().padStart(2,'0') + ':' + n.getMinutes().toString().padStart(2,'0');
+}
+function updateGreeting() {
+  const h = new Date().getHours();
+  const g = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const name = farmer?.name ? `, ${farmer.name.split(' ')[0]}` : '';
+  document.getElementById('greeting').textContent = `${g}${name} 👋`;
+}
+
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+function goTo(screen) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('screen-' + screen).classList.add('active');
+  const nav = document.getElementById('nav-' + screen); if (nav) nav.classList.add('active');
+  window.scrollTo(0, 0);
+  if (screen === 'weather' && !document.getElementById('weatherContainer').querySelector('.cur-weather')) loadWeather();
+  if (screen === 'shops'   && !document.getElementById('shopsContainer').querySelector('.shop-card')) loadShops();
+  if (screen === 'scan') renderLimitBars();
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+function openModal(id)  { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ══════════════════════════════════════════════
+// LOCATION
+// ══════════════════════════════════════════════
+function getLocation() {
+  if (!navigator.geolocation) { loadWeather(); loadShops(); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => { userLat = pos.coords.latitude; userLon = pos.coords.longitude; loadWeather(); loadShops(); },
+    ()  => { loadWeather(); loadShops(); }
+  );
+}
+
+// ══════════════════════════════════════════════
+// REGISTER
+// ══════════════════════════════════════════════
+async function registerFarmer() {
+  const name     = document.getElementById('regName').value.trim();
+  const phone    = document.getElementById('regPhone').value.trim();
+  const location = document.getElementById('regLocation').value.trim();
+  if (!name || !phone) { toast('⚠️ Name and phone required'); return; }
+  try {
+    const res  = await fetch(`${BASE_URL}/api/farmers`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, phone, location, lat: userLat, lon: userLon }) });
+    const data = await res.json();
+    if (data.success) { farmer = data.farmer; localStorage.setItem('agriscan_farmer', JSON.stringify(farmer)); closeModal('registerModal'); updateGreeting(); toast(data.existing ? `Welcome back, ${farmer.name.split(' ')[0]}! 👋` : `✅ Welcome, ${farmer.name.split(' ')[0]}!`); }
+  } catch { toast('❌ Server unreachable'); closeModal('registerModal'); }
+}
+
+// ══════════════════════════════════════════════
+// SCAN
+// ══════════════════════════════════════════════
+function handleFile(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    selectedB64 = ev.target.result.split(',')[1]; selectedMime = file.type;
+    const img = document.getElementById('previewImg');
+    const zone = document.getElementById('uploadZone');
+    img.src = ev.target.result; img.style.display = 'block';
+    zone.classList.add('has-image');
+    zone.querySelectorAll('span,div').forEach(el => el.style.display = 'none');
+    document.getElementById('analyzeBtn').disabled = false;
+    document.getElementById('resultCard').classList.remove('show');
+    toast('✅ Image ready — tap Analyze!');
+  };
+  reader.readAsDataURL(file);
+}
+
+async function analyzeImage() {
+  if (!selectedB64) return;
+  if (!isPremium() && scansLeft() <= 0) { toast('🚫 Daily limit reached. Upgrade!'); goTo('premium'); return; }
+  document.getElementById('analyzeBtn').disabled = true;
+  document.getElementById('scanSpinner').classList.add('show');
+  document.getElementById('resultCard').classList.remove('show');
+  try {
+    const res  = await fetch(`${BASE_URL}/api/analyze`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image_base64: selectedB64, mime_type: selectedMime, farmer_id: farmer?.id || null, lat: userLat, lon: userLon }) });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error);
+    scanCount++; localStorage.setItem('agriscan_scans_today', scanCount.toString());
+    renderLimitBars(); renderResult(data.result);
+  } catch(err) { toast('❌ ' + (err.message || 'Analysis failed')); }
+  document.getElementById('scanSpinner').classList.remove('show');
+  document.getElementById('analyzeBtn').disabled = false;
+}
+
+function renderResult(r) {
+  const isHealthy = r.is_healthy || r.disease_name === 'Healthy Plant';
+  const sevC = { none:'#66bb6a', low:'#66bb6a', medium:'#f9a825', high:'#c62828' };
+  const sev  = r.severity || 'none';
+  const toList = a => Array.isArray(a) ? '<ul>' + a.map(x => `<li>${x}</li>`).join('') + '</ul>' : a;
+  const locked = '<span style="color:var(--text-muted)">🔒 Upgrade to Premium to unlock</span>';
+  const teaser = !isPremium() && !isHealthy ? `<div class="premium-teaser"><h4>⭐ Get Full Treatment Plan</h4><p>Detailed treatment steps, fungicide names &amp; prevention schedule for $2/month.</p><button class="btn-gold" style="padding:10px;font-size:.85rem" onclick="goTo('premium')">Upgrade Now</button></div>` : '';
+  document.getElementById('resultContent').innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span style="font-size:2rem">${isHealthy ? '✅' : '🦠'}</span>
+      <div><div class="result-disease" style="color:${isHealthy?'var(--leaf)':'var(--rust)'}">${r.disease_name}</div><span class="result-badge">${r.crop_type||'Unknown crop'}</span></div>
+    </div>
+    ${!isHealthy ? `<div class="r-section"><div class="r-label">📊 Severity</div><div class="sev-bar"><div class="sev-track"><div class="sev-fill" style="width:${r.severity_percent||0}%;background:${sevC[sev]}"></div></div><span style="font-size:.78rem;font-weight:700;color:${sevC[sev]}">${sev.toUpperCase()} (${r.severity_percent||0}%)</span></div></div>` : ''}
+    <div class="r-section"><div class="r-label">🔬 Symptoms</div><div class="r-body">${r.symptoms||'None observed'}</div></div>
+    <div class="r-section"><div class="r-label">💡 Cause</div><div class="r-body">${r.cause}</div></div>
+    ${!isHealthy ? `
+    <div class="r-section"><div class="r-label">💊 Treatment</div><div class="r-body">${isPremium() ? toList(r.treatment) : locked}</div></div>
+    <div class="r-section"><div class="r-label">🛡️ Prevention</div><div class="r-body">${isPremium() ? toList(r.prevention) : locked}</div></div>
+    <div style="background:#fff3e0;border:1.5px solid #ffe082;border-radius:12px;padding:11px 13px"><span style="font-weight:700;font-size:.82rem;color:#e65100">⏰ Urgency: </span><span style="font-size:.82rem;color:var(--soil)">${r.urgency}</span></div>
+    ${teaser}` : `<div style="background:#e8f5e9;border:1.5px solid #a5d6a7;border-radius:12px;padding:14px;text-align:center"><div style="font-size:1.2rem;margin-bottom:5px">🌿</div><div style="font-weight:700;color:var(--leaf)">Your plant looks healthy!</div></div>`}`;
+  document.getElementById('resultCard').classList.add('show');
+  document.getElementById('analyzeBtn').disabled = false;
+  setTimeout(() => document.getElementById('resultCard').scrollIntoView({ behavior:'smooth', block:'start' }), 100);
+}
+
+// ══════════════════════════════════════════════
+// CROPS
+// ══════════════════════════════════════════════
+async function loadCrops() {
+  let crops = null;
+  if (navigator.onLine) { try { const res = await fetch(`${BASE_URL}/api/crops`); const d = await res.json(); if (d.success) { crops = d.crops; localStorage.setItem('agriscan_crops', JSON.stringify(crops)); } } catch {} }
+  if (!crops) { try { crops = JSON.parse(localStorage.getItem('agriscan_crops')); } catch {} }
+  renderCrops(crops || fallbackCrops());
+}
+const bgC = ['#fff8e1','#ffebee','#e8f5e9','#e3f2fd','#f3e5f5'];
+function renderCrops(crops) {
+  document.getElementById('cropsContainer').innerHTML = crops.map((c,i) => `
+    <div class="crop-detail-card" id="cc${i}">
+      <div class="crop-detail-header" onclick="toggleCrop(${i})">
+        <div class="crop-emoji-bg" style="background:${bgC[i%5]}">${c.emoji||'🌱'}</div>
+        <div class="crop-info"><h3>${c.name}</h3><p>${c.tag||''} · ${c.diseases?.length||0} diseases</p></div>
+        <span class="chevron">›</span>
+      </div>
+      <div class="crop-expand">
+        <div style="font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:10px">Common Diseases</div>
+        <div>${(c.diseases||[]).map(d => `<span class="disease-tag">⚠️ ${d}</span>`).join('')}</div>
+        <div style="margin-top:14px"><div style="font-size:.78rem;font-weight:700;color:var(--leaf);margin-bottom:8px">🌱 Growing Tips</div>
+        ${(c.tips||[]).map(t => `<div class="tip-item"><div class="tip-dot"></div><span>${t}</span></div>`).join('')}</div>
+        <button class="btn-primary" style="margin-top:13px;padding:11px" onclick="goTo('scan')">📷 Scan ${c.name} Leaf</button>
+      </div>
+    </div>`).join('');
+  crops.slice(0,4).forEach((c,i) => { const el = document.getElementById('hc'+i); if (el) el.textContent = `${c.diseases?.length||0} diseases`; });
+}
+function toggleCrop(i) { document.getElementById('cc'+i).classList.toggle('open'); }
+
+// ══════════════════════════════════════════════
+// WEATHER
+// ══════════════════════════════════════════════
+async function loadWeather() {
+  let data = null;
+  if (navigator.onLine) { try { const url = `${BASE_URL}/api/weather${userLat ? `?lat=${userLat}&lon=${userLon}` : ''}`; const res = await fetch(url); const d = await res.json(); if (d.success) { data = d; localStorage.setItem('agriscan_weather', JSON.stringify({...d, cachedAt: Date.now()})); } } catch {} }
+  if (!data) { try { const c = JSON.parse(localStorage.getItem('agriscan_weather')); if (c && Date.now() - c.cachedAt < 7200000) data = c; } catch {} }
+  if (data) {
+    renderWeather(data);
+    document.getElementById('homeTemp').textContent = data.current.temp + '°C';
+    document.getElementById('homeDesc').textContent = data.current.description;
+    document.getElementById('homeIcon').textContent = data.current.icon;
+    const a = data.alerts?.[0];
+    document.getElementById('homeAlert').textContent = a ? (a.type==='danger'?'⚠️ High risk':a.type==='warning'?'⚠️ Watch crops':'✅ All clear') : '✅ All clear';
+  } else { document.getElementById('weatherContainer').innerHTML = '<div class="loading-row card">⚠️ Weather unavailable. Check API key.</div>'; }
+}
+function renderWeather(d) {
+  const c = d.current; const cached = !navigator.onLine ? '<div class="offline-badge">📴 Cached data</div>' : '';
+  document.getElementById('weatherContainer').innerHTML = `${cached}
+    <div class="cur-weather">
+      <div class="cw-icon">${c.icon}</div><div class="cw-temp">${c.temp}°C</div>
+      <div class="cw-desc">${c.description}</div><div class="cw-feels">Feels like ${c.feels_like}°C · ${c.city||'Your area'}</div>
+      <div class="cw-meta">
+        <div><div class="cw-meta-val">${c.humidity}%</div><div class="cw-meta-lbl">Humidity</div></div>
+        <div><div class="cw-meta-val">${c.wind_speed} km/h</div><div class="cw-meta-lbl">Wind</div></div>
+        <div><div class="cw-meta-val">${c.rain_chance}%</div><div class="cw-meta-lbl">Rain</div></div>
+      </div>
+    </div>
+    <div class="section-title">⚠️ Crop Alerts</div>
+    ${(d.alerts||[]).map(a => `<div class="alert-card ${a.type}"><span style="font-size:1.2rem">${a.icon}</span><div><div class="alert-title">${a.title}</div><div class="alert-desc">${a.desc}</div></div></div>`).join('')}
+    <div class="section-title" style="margin-top:16px">📅 ${isPremium()?'7':'3'}-Day Forecast</div>
+    <div class="forecast-scroll">
+      ${(d.forecast||[]).slice(0, isPremium()?7:3).map((f,i) => `<div class="fcast-item"><div class="fcast-day">${i===0?'Today':f.day}</div><div class="fcast-icon">${f.icon}</div><div class="fcast-temp">${f.temp}°</div><div class="fcast-rain">💧 ${f.rain_chance}%</div></div>`).join('')}
+      ${!isPremium() ? `<div class="fcast-item" style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border-color:#fde68a;cursor:pointer;min-width:78px" onclick="goTo('premium')"><div class="fcast-day">+4 days</div><div class="fcast-icon">🔒</div><div style="font-size:.7rem;color:#92400e;font-weight:600">Premium</div></div>` : ''}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// SHOPS
+// ══════════════════════════════════════════════
+async function loadShops() {
+  let shops = null;
+  if (navigator.onLine) { try { const url = `${BASE_URL}/api/shops${userLat ? `?lat=${userLat}&lon=${userLon}` : ''}`; const res = await fetch(url); const d = await res.json(); if (d.success) { shops = d.shops; localStorage.setItem('agriscan_shops', JSON.stringify(shops)); } } catch {} }
+  if (!shops) { try { shops = JSON.parse(localStorage.getItem('agriscan_shops')); } catch {} }
+  if (shops) renderShops(shops);
+  else document.getElementById('shopsContainer').innerHTML = '<div class="loading-row">⚠️ Could not load shops.</div>';
+}
+
+function renderShops(shops) {
+  allShopsData = shops;
+  if (!shops.length) { document.getElementById('shopsContainer').innerHTML = '<div class="loading-row">No shops found.</div>'; return; }
+  initShopMap(shops);
+  renderShopCards(shops);
+  // Home preview
+  const s = shops[0];
+  document.getElementById('homeShop').innerHTML = `
+    <div class="shop-card ${s.is_sponsored?'sponsored':''}" onclick="goTo('shops')" style="cursor:pointer">
+      ${s.is_sponsored ? '<div class="sp-badge featured">⭐ Featured</div>' : ''}
+      ${s.ad_message   ? `<div class="shop-ad-msg">💬 "${s.ad_message}"</div>` : ''}
+      <div class="shop-top"><div class="shop-name">${s.name}</div><span class="shop-dist">${s.distance_km!=null?s.distance_km+' km':'Nearby'}</span></div>
+      <div class="shop-addr">📍 ${s.address}</div>
+      <div style="font-size:.8rem;color:var(--leaf);font-weight:600;margin-top:8px">View all ${shops.length} shops + map →</div>
+    </div>`;
+}
+
+function renderShopCards(shops) {
+  if (!shops.length) { document.getElementById('shopsContainer').innerHTML = '<div class="loading-row">No shops match this filter.</div>'; return; }
+  document.getElementById('shopsContainer').innerHTML = shops.map(s => `
+    <div class="shop-card ${s.ad_package==='premium_ad'?'featured':s.is_sponsored?'sponsored':''}">
+      ${s.is_sponsored ? `<div class="sp-badge ${s.ad_package==='featured_ad'||s.ad_package==='premium_ad'?'featured':'sponsored'}">${s.ad_package==='premium_ad'?'🚀 Premium Ad':s.ad_package==='featured_ad'?'⭐ Featured':'📋 Listed'}</div>` : ''}
+      ${s.ad_message   ? `<div class="shop-ad-msg">💬 "${s.ad_message}"</div>` : ''}
+      <div class="shop-top">
+        <div class="shop-name">${s.name}</div>
+        <span class="shop-dist">${s.distance_km!=null?s.distance_km+' km':'Nearby'}</span>
+      </div>
+      <div class="shop-addr">📍 ${s.address}</div>
+      ${s.rating ? `<div class="shop-rating">${'★'.repeat(Math.round(s.rating))}${'☆'.repeat(5-Math.round(s.rating))} ${s.rating}</div>` : ''}
+      <div class="shop-tags">${(s.products||[]).map(p => `<span class="shop-tag">${p}</span>`).join('')}</div>
+      <div class="shop-actions">
+        <button class="btn-call" onclick="event.stopPropagation();toast('📞 Calling ${s.name}…')">📞 Call</button>
+        <button class="btn-dir-small" onclick="event.stopPropagation();openDirections(${JSON.stringify(s).split('"').join('&quot;')})">🗺️ Directions</button>
+      </div>
+    </div>`).join('');
+}
+
+function filterShops(type, btn) {
+  document.querySelectorAll('.map-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  let filtered = allShopsData;
+  if (type === 'featured')    filtered = allShopsData.filter(s => s.is_sponsored);
+  else if (type !== 'all')    filtered = allShopsData.filter(s => (s.products||[]).some(p => p.toLowerCase().includes(type.slice(0,-1)))); // remove trailing 's'
+  if (googleMap) placeShopMarkers(filtered);
+  renderShopCards(filtered);
+}
+
+// ══════════════════════════════════════════════
+// MAPS — Leaflet.js + OpenStreetMap (100% FREE)
+// No API key, no credit card needed
+// ══════════════════════════════════════════════
+
+// Fetch ORS key from backend (for routing)
+async function fetchMapsKey() {
+  try {
+    const res  = await fetch(`${BASE_URL}/api/maps/config`);
+    const data = await res.json();
+    mapsApiKey = data.key || ''; // OpenRouteService key (optional)
+  } catch { mapsApiKey = ''; }
+}
+
+// Load Leaflet CSS + JS from CDN
+function loadLeaflet() {
+  if (window.L) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    // CSS
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link');
+      link.id = 'leaflet-css'; link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      document.head.appendChild(link);
+    }
+    // JS
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+// Shop marker SVG icons
+function shopIconSvg(sponsored) {
+  return sponsored
+    ? `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48"><path d="M20 0C9 0 0 9 0 20c0 14 20 28 20 28S40 34 40 20C40 9 31 0 20 0z" fill="#f59e0b" stroke="#fff" stroke-width="2"/><text x="20" y="26" text-anchor="middle" font-size="16">⭐</text></svg>`
+    : `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44"><path d="M18 0C8 0 0 8 0 18c0 13 18 26 18 26S36 31 36 18C36 8 28 0 18 0z" fill="#2e7d32" stroke="#fff" stroke-width="2"/><text x="18" y="23" text-anchor="middle" font-size="14">🏪</text></svg>`;
+}
+
+async function initShopMap(shops) {
+  const mapEl = document.getElementById('shopMap');
+  try {
+    await loadLeaflet();
+    // Destroy old map instance if exists
+    if (googleMap) { googleMap.remove(); googleMap = null; }
+    mapEl.innerHTML = '';
+    mapEl.style.background = '';
+
+    const center = userLat ? [userLat, userLon] : [-0.303099, 36.080026]; // default: Nakuru
+    googleMap = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView(center, 14);
+
+    // OpenStreetMap tile layer — completely free
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(googleMap);
+
+    // Small attribution
+    L.control.attribution({ prefix: '© <a href="https://openstreetmap.org">OpenStreetMap</a>' }).addTo(googleMap);
+
+    // Blue dot for user location
+    if (userLat) {
+      L.circleMarker([userLat, userLon], {
+        radius: 9, fillColor: '#4285F4', fillOpacity: 1,
+        color: '#fff', weight: 3
+      }).addTo(googleMap).bindPopup('📍 You are here');
+    }
+
+    placeShopMarkers(shops);
+  } catch(e) {
+    mapEl.innerHTML = `<div class="map-loading"><span style="font-size:2rem">🗺️</span><span style="font-weight:600;font-size:.85rem;color:var(--leaf)">Map failed to load — check your internet</span></div>`;
+  }
+}
+
+function placeShopMarkers(shops) {
+  // Remove old markers
+  gMarkers.forEach(m => { if (googleMap) googleMap.removeLayer(m); });
+  gMarkers = [];
+  if (!googleMap) return;
+
+  const bounds = [];
+  if (userLat) bounds.push([userLat, userLon]);
+
+  shops.forEach(s => {
+    if (!s.lat) return;
+    const lat = parseFloat(s.lat);
+    const lng = parseFloat(s.lon || s.lng);
+    bounds.push([lat, lng]);
+
+    const icon = L.divIcon({
+      html: shopIconSvg(s.is_sponsored),
+      className: '',
+      iconSize:   s.is_sponsored ? [40, 48] : [36, 44],
+      iconAnchor: s.is_sponsored ? [20, 48] : [18, 44],
+      popupAnchor:[0, -44]
+    });
+
+    const marker = L.marker([lat, lng], { icon, zIndexOffset: s.is_sponsored ? 500 : 0 })
+      .addTo(googleMap)
+      .bindPopup(`
+        <div style="font-family:'DM Sans',sans-serif;min-width:160px">
+          <div style="font-weight:700;font-size:.9rem;margin-bottom:4px">${s.name}</div>
+          <div style="font-size:.78rem;color:#666;margin-bottom:8px">📍 ${s.address}</div>
+          <button onclick="openDirections(${JSON.stringify(s).split('"').join('&quot;')})"
+            style="background:#2e7d32;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:.78rem;font-weight:600;cursor:pointer;width:100%">
+            🗺️ Get Directions
+          </button>
+        </div>`);
+
+    marker.on('click', () => marker.openPopup());
+    gMarkers.push(marker);
+  });
+
+  if (bounds.length > 1) {
+    googleMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
+  }
+}
+
+// ══════════════════════════════════════════════
+// DIRECTIONS MODAL — Leaflet + OpenRouteService
+// ORS free tier: 2,000 requests/day, no card
+// ══════════════════════════════════════════════
+let dirRouteLayer = null;
+
+async function openDirections(shop) {
+  if (typeof shop === 'string') shop = JSON.parse(shop.replace(/&quot;/g, '"'));
+  activeShop = shop;
+
+  document.getElementById('directionsModal').classList.add('show');
+  document.getElementById('dirShopName').textContent = shop.name;
+  document.getElementById('dirDist').textContent = shop.distance_km != null ? shop.distance_km + ' km' : 'Nearby';
+  document.getElementById('dirTime').textContent = 'Calculating…';
+  document.getElementById('dirSteps').innerHTML = '<div class="loading-row" style="padding:16px"><div class="spinner" style="width:30px;height:30px;margin:0 auto 8px"></div>Getting directions…</div>';
+  document.getElementById('dirCallBtn').onclick = () => toast(`📞 Calling ${shop.name}…`);
+
+  const statusEl = document.getElementById('dirOpenStatus');
+  statusEl.style.display = 'none';
+
+  // Reset travel mode
+  currentTravelMode = 'DRIVING';
+  document.querySelectorAll('.travel-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tm-DRIVING').classList.add('active');
+
+  try {
+    await loadLeaflet();
+    const mapEl = document.getElementById('directionsMap');
+
+    // Destroy previous map instance
+    if (directionsMapObj) { directionsMapObj.remove(); directionsMapObj = null; dirRouteLayer = null; }
+    mapEl.innerHTML = '';
+
+    const destLat = parseFloat(shop.lat);
+    const destLng = parseFloat(shop.lon || shop.lng);
+
+    directionsMapObj = L.map(mapEl, { zoomControl: false, attributionControl: false })
+      .setView([destLat, destLng], 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
+      .addTo(directionsMapObj);
+
+    // Destination marker
+    const destIcon = L.divIcon({
+      html: shopIconSvg(shop.is_sponsored),
+      className: '', iconSize: [36,44], iconAnchor: [18,44]
+    });
+    L.marker([destLat, destLng], { icon: destIcon }).addTo(directionsMapObj)
+      .bindPopup(`<b>${shop.name}</b>`).openPopup();
+
+    // User location dot
+    if (userLat) {
+      L.circleMarker([userLat, userLon], {
+        radius: 9, fillColor: '#4285F4', fillOpacity: 1, color: '#fff', weight: 3
+      }).addTo(directionsMapObj).bindPopup('📍 You');
+    }
+
+    // Fetch route
+    await calcRoute(shop, 'DRIVING');
+
+  } catch(e) {
+    document.getElementById('directionsMap').innerHTML =
+      `<div class="map-loading"><span style="font-size:2rem">🗺️</span><span style="font-size:.82rem">Map failed to load</span></div>`;
+    document.getElementById('dirSteps').innerHTML =
+      `<div style="padding:12px;text-align:center"><p style="color:var(--text-muted);font-size:.82rem">Check your internet connection.</p></div>`;
+  }
+}
+
+// ORS profile mapping
+const ORS_PROFILE = { DRIVING:'driving-car', WALKING:'foot-walking', BICYCLING:'cycling-regular', TRANSIT:'driving-car' };
+
+async function calcRoute(shop, mode) {
+  if (!userLat) {
+    document.getElementById('dirSteps').innerHTML =
+      `<div style="padding:12px;font-size:.82rem;color:var(--text-muted)">📍 Enable location access for turn-by-turn directions.</div>`;
+    document.getElementById('dirTime').textContent = '–';
+    return;
+  }
+
+  const destLat = parseFloat(shop.lat);
+  const destLng = parseFloat(shop.lon || shop.lng);
+
+  // Remove old route
+  if (dirRouteLayer && directionsMapObj) { directionsMapObj.removeLayer(dirRouteLayer); dirRouteLayer = null; }
+
+  document.getElementById('dirSteps').innerHTML =
+    '<div class="loading-row" style="padding:12px"><div class="spinner" style="width:24px;height:24px;margin:0 auto 6px"></div>Calculating route…</div>';
+
+  try {
+    // Use OpenRouteService — free, no card needed
+    // Sign up at openrouteservice.org for 2,000 free requests/day
+    const orsKey = mapsApiKey; // reuse the key slot for ORS key
+    const profile = ORS_PROFILE[mode] || 'driving-car';
+
+    let routeData = null;
+
+    if (orsKey) {
+      // Full turn-by-turn via ORS API
+      const res = await fetch(`https://api.openrouteservice.org/v2/directions/${profile}/json`, {
+        method: 'POST',
+        headers: { 'Authorization': orsKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coordinates: [[userLon, userLat],[destLng, destLat]], instructions: true, language: 'en' })
+      });
+      routeData = await res.json();
+    }
+
+    if (routeData?.routes?.[0]) {
+      const route    = routeData.routes[0];
+      const summary  = route.summary;
+      const seg      = route.segments[0];
+      const geometry = decodePolyline(route.geometry);
+
+      // Draw route line
+      dirRouteLayer = L.polyline(geometry, { color:'#2e7d32', weight:5, opacity:.85 }).addTo(directionsMapObj);
+      directionsMapObj.fitBounds(dirRouteLayer.getBounds(), { padding:[30,30] });
+
+      // Update pills
+      const distKm   = (summary.distance / 1000).toFixed(1);
+      const mins     = Math.round(summary.duration / 60);
+      document.getElementById('dirDist').textContent = distKm + ' km';
+      document.getElementById('dirTime').textContent = mins < 60 ? mins + ' min' : Math.floor(mins/60) + 'h ' + (mins%60) + 'm';
+
+      // Turn-by-turn steps
+      const stepIcons = [,'↗','↙','←','→','↑','↓','⟳','↩','↪'];
+      document.getElementById('dirSteps').innerHTML = seg.steps.map((step, i) => `
+        <div class="dir-step">
+          <div class="step-icon">${i === 0 ? '📍' : i === seg.steps.length-1 ? '🏁' : (i+1)}</div>
+          <div class="step-body">
+            <div class="step-instr">${step.instruction}</div>
+            <div class="step-meta">${(step.distance/1000).toFixed(2)} km · ${Math.round(step.duration/60)} min</div>
+          </div>
+        </div>`).join('');
+
+    } else {
+      // Fallback: draw straight line + estimate
+      dirRouteLayer = L.polyline([[userLat,userLon],[destLat,destLng]], {
+        color:'#2e7d32', weight:4, opacity:.6, dashArray:'8,8'
+      }).addTo(directionsMapObj);
+      directionsMapObj.fitBounds([[userLat,userLon],[destLat,destLng]], { padding:[40,40] });
+
+      // Rough estimate (straight-line distance × 1.3 for road factor)
+      const straight = haversineKm(userLat, userLon, destLat, destLng);
+      const roadEst  = (straight * 1.3).toFixed(1);
+      const minsEst  = Math.round(straight * 1.3 / (mode==='WALKING'?5:mode==='BICYCLING'?15:40) * 60);
+      document.getElementById('dirDist').textContent = roadEst + ' km (est.)';
+      document.getElementById('dirTime').textContent = minsEst + ' min (est.)';
+      document.getElementById('dirSteps').innerHTML = `
+        <div style="background:#fff3e0;border:1.5px solid #ffe082;border-radius:12px;padding:14px;text-align:center;margin-bottom:10px">
+          <div style="font-size:.82rem;color:#92400e;font-weight:600;margin-bottom:6px">📍 Estimated straight-line route</div>
+          <div style="font-size:.78rem;color:#78350f">For turn-by-turn directions, add a free OpenRouteService key. Get one at <strong>openrouteservice.org</strong></div>
+        </div>
+        <div class="dir-step"><div class="step-icon">📍</div><div class="step-body"><div class="step-instr">Start from your current location</div></div></div>
+        <div class="dir-step"><div class="step-icon">🏁</div><div class="step-body"><div class="step-instr">Arrive at ${shop.name}</div><div class="step-meta">${roadEst} km · ${minsEst} min</div></div></div>`;
+    }
+
+  } catch(e) {
+    document.getElementById('dirSteps').innerHTML =
+      `<div style="padding:12px;font-size:.82rem;color:var(--text-muted)">⚠️ Could not load route. Check internet connection.</div>`;
+  }
+}
+
+// Decode encoded polyline (ORS uses Google's polyline format)
+function decodePolyline(encoded) {
+  const coords = []; let index = 0, lat = 0, lng = 0;
+  while (index < encoded.length) {
+    let b, shift = 0, result = 0;
+    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lat += (result & 1) ? ~(result >> 1) : result >> 1;
+    shift = 0; result = 0;
+    do { b = encoded.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+    lng += (result & 1) ? ~(result >> 1) : result >> 1;
+    coords.push([lat / 1e5, lng / 1e5]);
+  }
+  return coords;
+}
+
+// Haversine distance
+function haversineKm(lat1,lon1,lat2,lon2) {
+  const R=6371, dLat=(lat2-lat1)*Math.PI/180, dLon=(lon2-lon1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function setTravelMode(mode) {
+  currentTravelMode = mode;
+  document.querySelectorAll('.travel-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tm-' + mode)?.classList.add('active');
+  if (activeShop) calcRoute(activeShop, mode);
+}
+
+// Open in Google Maps or OsmAnd (works without key)
+function openInGoogleMaps() {
+  if (!activeShop) return;
+  const destLat = activeShop.lat;
+  const destLng = activeShop.lon || activeShop.lng;
+  const origin  = userLat ? `${userLat},${userLon}` : '';
+  const modeMap = { DRIVING:'driving', WALKING:'walking', BICYCLING:'bicycling', TRANSIT:'transit' };
+  // Opens Google Maps app on phone, Google Maps website on desktop
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}${origin?'&origin='+origin:''}&travelmode=${modeMap[currentTravelMode]||'driving'}`, '_blank');
+}
+
+function closeDirections() {
+  document.getElementById('directionsModal').classList.remove('show');
+  if (dirRouteLayer && directionsMapObj) { directionsMapObj.removeLayer(dirRouteLayer); dirRouteLayer = null; }
+  if (directionsMapObj) { directionsMapObj.remove(); directionsMapObj = null; }
+}
+
+// ══════════════════════════════════════════════
+// PREMIUM / PAYMENTS
+// ══════════════════════════════════════════════
+function selectPlan(plan) {
+  selectedPlan = plan;
+  ['free','premium','pro'].forEach(p => document.getElementById('pc-'+p)?.classList.remove('selected'));
+  document.getElementById('pc-' + plan)?.classList.add('selected');
+  const labels = { free:'Continue Free', premium:'⭐ Upgrade to Premium — $2/month', pro:'🚀 Upgrade to Pro — $5/month' };
+  document.getElementById('upgradeBtn').textContent = labels[plan];
+}
+function upgradePlan() {
+  if (selectedPlan === 'free') { toast('✅ You are on the free plan'); return; }
+  const prices = { premium:2, pro:5 };
+  document.getElementById('payAmount').textContent = `$${prices[selectedPlan]}/month`;
+  document.getElementById('payPlanName').textContent = selectedPlan === 'pro' ? '🚀 Pro Plan' : '⭐ Premium Plan';
+  openModal('paymentModal');
+}
+
+async function payWithMpesa(forShop = false) {
+  const phone = document.getElementById(forShop ? 'adPhoneMpesa' : 'mpesaPhone').value.trim();
+  if (!phone) { toast('⚠️ Enter your M-Pesa phone number'); return; }
+  const btn = document.getElementById(forShop ? 'mpesaShopBtn' : 'mpesaBtn');
+  btn.disabled = true; btn.textContent = '📱 Sending to phone…';
+  try {
+    const prices = { premium:2, pro:5 };
+    const res = await fetch(`${BASE_URL}/api/mpesa/stk-push`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ phone, amount: forShop ? getAdPackagePrice() : prices[selectedPlan], type: forShop ? 'shop_ad' : 'subscription', plan_id: forShop ? null : selectedPlan, farmer_id: farmer?.id || null }) });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'M-Pesa request failed');
+    btn.textContent = '⏳ Waiting for PIN…';
+    toast('📱 Check your phone! Enter M-Pesa PIN to complete.');
+    pollPayment('mpesa', data.checkout_request_id, forShop);
+  } catch(err) { toast('❌ ' + (err.message || 'M-Pesa failed')); btn.disabled = false; btn.textContent = '📱 Pay with M-Pesa'; }
+}
+
+async function payWithFlutterwave(forShop = false) {
+  const email = document.getElementById(forShop ? 'adEmail' : 'flwEmail').value.trim();
+  if (!email) { toast('⚠️ Enter your email address'); return; }
+  const btn = document.getElementById(forShop ? 'flwShopBtn' : 'flwBtn');
+  btn.disabled = true; btn.textContent = '⏳ Loading checkout…';
+  try {
+    const prices = { premium:2, pro:5 };
+    const res = await fetch(`${BASE_URL}/api/flutterwave/initiate`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ amount: forShop ? getAdPackagePrice() : prices[selectedPlan], currency:'KES', email, phone: farmer?.phone||'', name: farmer?.name||'AgriScan Farmer', type: forShop ? 'shop_ad' : 'subscription', plan_id: forShop ? null : selectedPlan, farmer_id: farmer?.id || null }) });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Payment failed');
+    localStorage.setItem('agriscan_pending_tx', JSON.stringify({ tx_ref: data.tx_ref, plan_id: selectedPlan, type: forShop ? 'shop_ad' : 'subscription' }));
+    window.location.href = data.payment_link;
+  } catch(err) { toast('❌ ' + (err.message || 'Payment failed')); btn.disabled = false; btn.textContent = '💳 Pay with Card / Bank'; }
+}
+
+let pollInterval = null;
+function pollPayment(method, ref, forShop = false) {
+  let attempts = 0;
+  pollInterval = setInterval(async () => {
+    if (++attempts > 40) { clearInterval(pollInterval); toast('⏰ Payment timed out. Try again.'); resetPayBtns(); return; }
+    try {
+      const res = await fetch(`${BASE_URL}/api/${method}/status/${ref}`);
+      const data = await res.json();
+      if (data.status === 'completed') { clearInterval(pollInterval); forShop ? handleShopAdSuccess() : handleSubscriptionSuccess(data.payment?.plan_id || selectedPlan); }
+      else if (data.status === 'failed') { clearInterval(pollInterval); toast('❌ Payment failed or cancelled.'); resetPayBtns(); }
+    } catch {}
+  }, 3000);
+}
+
+function checkFlutterwaveReturn() {
+  const params = new URLSearchParams(window.location.search);
+  if (!params.get('payment')) return;
+  window.history.replaceState({}, document.title, window.location.pathname);
+  const pending = JSON.parse(localStorage.getItem('agriscan_pending_tx') || 'null');
+  if (params.get('payment') === 'success' && pending) {
+    localStorage.removeItem('agriscan_pending_tx');
+    pending.type === 'shop_ad' ? handleShopAdSuccess() : handleSubscriptionSuccess(pending.plan_id);
+  } else if (['failed','error'].includes(params.get('payment'))) { toast('❌ Payment was not completed.'); }
+}
+
+function handleSubscriptionSuccess(planId) {
+  subscription = { plan_id: planId||selectedPlan, status:'active', expires_at: new Date(Date.now()+30*24*60*60*1000).toISOString() };
+  localStorage.setItem('agriscan_sub', JSON.stringify(subscription));
+  updatePlanUI(); closeModal('paymentModal');
+  toast(`🎉 Welcome to ${planId==='pro'?'Pro':'Premium'}! Unlimited scans unlocked!`);
+  if (planId === 'pro') cacheOffline();
+  goTo('home');
+}
+function handleShopAdSuccess() { closeModal('advertiseModal'); toast(`✅ Your shop ad is now live! Farmers nearby will see it.`); }
+function resetPayBtns() {
+  ['mpesaBtn','flwBtn','mpesaShopBtn','flwShopBtn'].forEach(id => { const el = document.getElementById(id); if (el) { el.disabled = false; el.textContent = id.includes('mpesa') ? '📱 Pay with M-Pesa' : '💳 Pay with Card / Bank'; } });
+}
+function getAdPackagePrice() { const pkg = document.getElementById('adPackage')?.value; return pkg==='premium_ad'?50:pkg==='featured_ad'?25:10; }
+async function cacheOffline() { try { await loadCrops(); await loadWeather(); await loadShops(); toast('📴 Data cached for offline use!'); } catch {} }
+
+async function submitShopAd() {
+  const name = document.getElementById('adShopName').value.trim();
+  const addr = document.getElementById('adAddress').value.trim();
+  if (!name || !addr) { toast('⚠️ Shop name and address required'); return; }
+  document.getElementById('adPaySection').style.display = 'block';
+  document.getElementById('adSubmitBtn').style.display = 'none';
+  const pkg = document.getElementById('adPackage').value;
+  document.getElementById('adPayPkg').textContent = pkg==='premium_ad'?'🚀 Premium Ad — $50':pkg==='featured_ad'?'⭐ Featured — $25':'📋 Basic — $10';
+}
+
+function updateRevCalc() {
+  const f = parseInt(document.getElementById('revSlider').value);
+  const ads = Math.round(f / 500) * 25;
+  document.getElementById('revFarmers').textContent = f.toLocaleString();
+  document.getElementById('revAds').textContent = '$' + ads.toLocaleString();
+  document.getElementById('revTotal').textContent = '$' + (f * 2 + ads).toLocaleString();
+}
+
+function fallbackCrops() {
+  return [
+    { name:'Maize',    emoji:'🌽', tag:'Cereal crop',    diseases:['Gray Leaf Spot','Maize Rust','Ear Rot','Stalk Rot','Smut','Downy Mildew','Streak Virus','Blight'], tips:['Plant disease-resistant seeds','Rotate with legumes','Proper spacing (75cm)','Scout weekly'] },
+    { name:'Tomatoes', emoji:'🍅', tag:'Vegetable crop', diseases:['Early Blight','Late Blight','Fusarium Wilt','Mosaic Virus','Leaf Mold','Septoria Spot','Anthracnose','Root Rot'], tips:['Stake plants','Use drip irrigation','Apply fungicide preventively','Remove infected leaves'] },
+    { name:'Potatoes', emoji:'🥔', tag:'Root crop',      diseases:['Late Blight','Early Blight','Blackleg','Scab','Bacterial Wilt','Soft Rot','Virus Y','Rhizoctonia'], tips:['Use certified seeds','Hill up soil','Harvest before heavy rains','Store cool and dry'] },
+    { name:'Beans',    emoji:'🫘', tag:'Legume crop',    diseases:['Bean Rust','Angular Leaf Spot','Anthracnose','Bacterial Blight','Root Rot','Mosaic Virus','Powdery Mildew'], tips:['Avoid waterlogged soil','Use rhizobium inoculant','Rotate with cereals','Pick pods promptly'] },
+    { name:'Rice',     emoji:'🌾', tag:'Cereal crop',    diseases:['Rice Blast','Bacterial Leaf Blight','Sheath Rot','Brown Spot','Tungro Virus','False Smut','Stem Rot'], tips:['Maintain water levels','Balanced fertilizer','Drain fields periodically','Use resistant varieties'] }
+  ];
+}
+</script>
+</body>
+</html>
