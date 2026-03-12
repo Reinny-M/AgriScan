@@ -12,8 +12,8 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'image_base64 and mime_type are required' });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'Gemini API key not configured on server' });
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: 'Groq API key not configured on server' });
 
   const prompt = `You are an expert plant pathologist AI for African farmers. Analyze this plant leaf image and respond ONLY with valid JSON in this exact format (no markdown, no extra text):
 {
@@ -31,20 +31,39 @@ router.post('/', async (req, res) => {
 Be specific and practical for small-scale African farmers. If the image is not a plant, set disease_name to "Not a plant image".`;
 
   try {
-    const geminiRes = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+    const groqRes = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
       {
-        contents: [{
-          parts: [
-            { text: prompt },
-            { inline_data: { mime_type, data: image_base64 } }
-          ]
-        }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 1024 }
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mime_type};base64,${image_base64}`
+                }
+              },
+              {
+                type: 'text',
+                text: prompt
+              }
+            ]
+          }
+        ],
+        temperature: 0.2,
+        max_tokens: 1024
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
       }
     );
 
-    const rawText = geminiRes.data.candidates[0].content.parts[0].text;
+    const rawText = groqRes.data.choices[0].message.content;
     const clean = rawText.replace(/```json|```/g, '').trim();
     const result = JSON.parse(clean);
     result.is_healthy = result.disease_name === 'Healthy Plant';
@@ -72,7 +91,7 @@ Be specific and practical for small-scale African farmers. If the image is not a
     res.json({ success: true, result });
 
   } catch (err) {
-    console.error('Gemini error:', err.response?.data || err.message);
+    console.error('Groq error:', err.response?.data || err.message);
     res.status(500).json({ error: 'AI analysis failed. Check your API key and try again.' });
   }
 });
