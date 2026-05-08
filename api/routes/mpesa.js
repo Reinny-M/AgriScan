@@ -1,180 +1,102 @@
-// ═══════════════════════════════════════════════════
-// M-PESA DARAJA API — Safaricom STK Push Integration
-// Docs: https://developer.safaricom.co.ke/
-// ═══════════════════════════════════════════════════
 const express = require('express');
-const router = express.Router();
-const axios = require('axios');
-const supabase = require('../supabase');
+const router  = express.Router();
+const axios   = require('axios');
 
 const MPESA_BASE = process.env.MPESA_ENV === 'production'
   ? 'https://api.safaricom.co.ke'
   : 'https://sandbox.safaricom.co.ke';
 
-// ── STEP 1: Get OAuth token from Safaricom ──
 async function getMpesaToken() {
   const key    = process.env.MPESA_CONSUMER_KEY;
   const secret = process.env.MPESA_CONSUMER_SECRET;
-  const auth   = Buffer.from(`${key}:${secret}`).toString('base64');
-
-  const res = await axios.get(
-    `${MPESA_BASE}/oauth/v1/generate?grant_type=client_credentials`,
-    { headers: { Authorization: `Basic ${auth}` } }
-  );
+  const creds  = Buffer.from(`${key}:${secret}`).toString('base64');
+  const res = await axios.get(`${MPESA_BASE}/oauth/v1/generate?grant_type=client_credentials`, {
+    headers: { Authorization: `Basic ${creds}` }
+  });
   return res.data.access_token;
 }
 
-// ── STEP 2: Build password for STK Push ──
-function getMpesaPassword() {
-  const shortcode  = process.env.MPESA_SHORTCODE;
-  const passkey    = process.env.MPESA_PASSKEY;
-  const timestamp  = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14);
-  const password   = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
-  return { password, timestamp };
+function formatPhone(phone) {
+  let p = phone.replace(/\s+/g, '').replace(/[^0-9+]/g, '');
+  if (p.startsWith('0')) p = '254' + p.slice(1);
+  if (p.startsWith('+')) p = p.slice(1);
+  return p;
 }
 
-// ── POST /api/mpesa/stk-push ──
-// Initiates STK Push — sends payment prompt to farmer's phone
-// Body: { phone, amount, type: 'subscription'|'shop_ad', plan_id?, shop_id?, farmer_id? }
+function getTimestamp() {
+  const d = new Date();
+  return [
+    d.getFullYear(),
+    String(d.getMonth()+1).padStart(2,'0'),
+    String(d.getDate()).padStart(2,'0'),
+    String(d.getHours()).padStart(2,'0'),
+    String(d.getMinutes()).padStart(2,'0'),
+    String(d.getSeconds()).padStart(2,'0')
+  ].join('');
+}
+
+// POST /api/mpesa/stk-push
 router.post('/stk-push', async (req, res) => {
-  const { phone, amount, type, plan_id, shop_id, farmer_id, description } = req.body;
+  const { phone, amount, type, plan_id, farmer_id } = req.body;
+  if (!phone || !amount) return res.status(400).json({ success:false, error:'phone and amount required' });
 
-  if (!phone || !amount || !type) {
-    return res.status(400).json({ error: 'phone, amount, and type are required' });
-  }
-
-  // Normalize phone: strip leading 0 or +254, add 254
-  const normalizedPhone = phone.replace(/^(\+254|0)/, '254');
+  const shortcode = process.env.MPESA_SHORTCODE;
+  const passkey   = process.env.MPESA_PASSKEY;
+  const callbackUrl = process.env.MPESA_CALLBACK_URL || 'https://agriscan.vercel.app/api/mpesa/callback';
 
   try {
-    const token = await getMpesaToken();
-    const { password, timestamp } = getMpesaPassword();
-    const shortcode = process.env.MPESA_SHORTCODE;
-    const callbackUrl = `${process.env.APP_URL}/api/mpesa/callback`;
+    const token     = await getMpesaToken();
+    const timestamp = getTimestamp();
+    const password  = Buffer.from(`${shortcode}${passkey}${timestamp}`).toString('base64');
 
-    const stkRes = await axios.post(
-      `${MPESA_BASE}/mpesa/stkpush/v1/processrequest`,
-      {
-        BusinessShortCode: shortcode,
-        Password: password,
-        Timestamp: timestamp,
-        TransactionType: 'CustomerPayBillOnline',
-        Amount: Math.ceil(amount * 130), // Convert USD to KES (approx rate)
-        PartyA: normalizedPhone,
-        PartyB: shortcode,
-        PhoneNumber: normalizedPhone,
-        CallBackURL: callbackUrl,
-        AccountReference: `AgriScan-${type === 'subscription' ? plan_id : 'ShopAd'}`,
-        TransactionDesc: description || `AgriScan ${type}`
-      },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    const stkRes = await axios.post(`${MPESA_BASE}/mpesa/stkpush/v1/processrequest`, {
+      BusinessShortCode: shortcode,
+      Password:          password,
+      Timestamp:         timestamp,
+      TransactionType:   'CustomerPayBillOnline',
+      Amount:            Math.round(amount * 135), // USD → KES approx
+      PartyA:            formatPhone(phone),
+      PartyB:            shortcode,
+      PhoneNumber:       formatPhone(phone),
+      CallBackURL:       callbackUrl,
+      AccountReference:  `AgriScan-${plan_id || type || 'payment'}`,
+      TransactionDesc:   `AgriScan ${plan_id || 'payment'}`
+    }, { headers: { Authorization: `Bearer ${token}` } });
 
-    const { CheckoutRequestID, ResponseCode, ResponseDescription } = stkRes.data;
+    const checkoutId = stkRes.data.CheckoutRequestID;
 
-    if (ResponseCode !== '0') {
-      return res.status(400).json({ error: ResponseDescription });
-    }
+    // Store pending transaction in memory (use Supabase in production)
+    global.pendingMpesa = global.pendingMpesa || {};
+    global.pendingMpesa[checkoutId] = { status:'pending', type, plan_id, farmer_id, amount };
 
-    // Save pending payment to DB
-    await supabase.from('payments').insert({
-      farmer_id:   farmer_id  || null,
-      shop_id:     shop_id    || null,
-      type,
-      plan_id:     plan_id    || null,
-      amount_usd:  amount,
-      currency:    'KES',
-      status:      'pending',
-      payment_method: 'mpesa',
-      payment_ref: CheckoutRequestID
-    });
-
-    res.json({
-      success: true,
-      checkout_request_id: CheckoutRequestID,
-      message: '📱 STK Push sent! Check your phone and enter M-Pesa PIN.'
-    });
-
+    res.json({ success: true, checkout_request_id: checkoutId, message: 'STK push sent. Enter PIN on your phone.' });
   } catch (err) {
-    console.error('M-Pesa STK error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'M-Pesa request failed. Please try again.' });
+    console.error('M-Pesa error:', err.response?.data || err.message);
+    res.status(500).json({ success: false, error: 'M-Pesa request failed. Check your Daraja credentials.' });
   }
 });
 
-// ── POST /api/mpesa/callback ──
-// Safaricom sends payment result here
-router.post('/callback', async (req, res) => {
+// GET /api/mpesa/status/:checkoutId
+router.get('/status/:checkoutId', async (req, res) => {
+  const pending = global.pendingMpesa?.[req.params.checkoutId];
+  if (!pending) return res.json({ status: 'pending' });
+  res.json({ status: pending.status, payment: pending });
+});
+
+// POST /api/mpesa/callback — Daraja calls this after payment
+router.post('/callback', (req, res) => {
   const body = req.body?.Body?.stkCallback;
-  if (!body) return res.json({ ResultCode: 0 });
+  if (!body) return res.json({ ResultCode: 0, ResultDesc: 'OK' });
 
-  const { CheckoutRequestID, ResultCode, ResultDesc, CallbackMetadata } = body;
+  const id     = body.CheckoutRequestID;
+  const code   = body.ResultCode;
+  global.pendingMpesa = global.pendingMpesa || {};
 
-  if (ResultCode === 0) {
-    // Payment successful
-    const meta = {};
-    CallbackMetadata?.Item?.forEach(item => { meta[item.Name] = item.Value; });
-
-    // Find pending payment
-    const { data: payment } = await supabase
-      .from('payments')
-      .select('*')
-      .eq('payment_ref', CheckoutRequestID)
-      .eq('status', 'pending')
-      .single();
-
-    if (payment) {
-      // Mark payment as completed
-      await supabase.from('payments').update({
-        status: 'completed',
-        payment_ref: meta.MpesaReceiptNumber || CheckoutRequestID
-      }).eq('id', payment.id);
-
-      // Activate what was paid for
-      if (payment.type === 'subscription' && payment.farmer_id) {
-        const expires = new Date();
-        expires.setDate(expires.getDate() + 30);
-        await supabase.from('subscriptions').insert({
-          farmer_id:  payment.farmer_id,
-          plan_id:    payment.plan_id,
-          status:     'active',
-          expires_at: expires.toISOString(),
-          payment_ref: meta.MpesaReceiptNumber,
-          amount_paid: payment.amount_usd
-        });
-      }
-
-      if (payment.type === 'shop_ad' && payment.shop_id) {
-        const expires = new Date();
-        expires.setDate(expires.getDate() + 30);
-        await supabase.from('shops').update({
-          is_sponsored:    true,
-          sponsored_until: expires.toISOString()
-        }).eq('id', payment.shop_id);
-      }
-    }
-  } else {
-    // Payment failed or cancelled
-    await supabase.from('payments').update({ status: 'failed' })
-      .eq('payment_ref', CheckoutRequestID);
+  if (global.pendingMpesa[id]) {
+    global.pendingMpesa[id].status = code === 0 ? 'completed' : 'failed';
   }
 
   res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
-});
-
-// ── GET /api/mpesa/status/:checkoutId ──
-// Poll payment status (frontend polls this every 3s)
-router.get('/status/:checkoutId', async (req, res) => {
-  try {
-    const { data: payment } = await supabase
-      .from('payments')
-      .select('status, type, plan_id')
-      .eq('payment_ref', req.params.checkoutId)
-      .single();
-
-    res.json({ success: true, status: payment?.status || 'pending', payment });
-  } catch {
-    res.json({ success: false, status: 'unknown' });
-  }
 });
 
 module.exports = router;
