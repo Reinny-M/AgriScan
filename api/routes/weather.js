@@ -1,134 +1,90 @@
 const express = require('express');
-const router = express.Router();
-const axios = require('axios');
+const router  = express.Router();
+const axios   = require('axios');
+
+const WEATHER_ICONS = {
+  Clear: '☀️', Clouds: '⛅', Rain: '🌧️', Drizzle: '🌦️',
+  Thunderstorm: '⛈️', Snow: '❄️', Mist: '🌫️', Fog: '🌫️',
+  Haze: '🌫️', Smoke: '🌫️', Dust: '💨', Sand: '💨',
+  Ash: '🌋', Squall: '💨', Tornado: '🌪️'
+};
+
+function weatherIcon(main) { return WEATHER_ICONS[main] || '🌤️'; }
+
+function cropAlerts(weather, humidity, windSpeed, rainChance) {
+  const alerts = [];
+  const temp = weather.main.temp;
+  const main = weather.weather[0].main;
+
+  if (main === 'Rain' || rainChance > 70)
+    alerts.push({ type:'danger', icon:'⚠️', title:'High Disease Risk', desc:'Wet conditions favor fungal diseases. Apply preventive fungicide before rain.' });
+  if (humidity > 80)
+    alerts.push({ type:'warning', icon:'💧', title:'High Humidity Alert', desc:'Humidity above 80% — ideal for blight and mold. Improve air circulation.' });
+  if (temp > 35)
+    alerts.push({ type:'warning', icon:'🌡️', title:'Heat Stress Risk', desc:'Temperatures above 35°C stress crops. Water in early morning and evening.' });
+  if (temp < 10)
+    alerts.push({ type:'warning', icon:'🥶', title:'Cold Risk', desc:'Low temperatures can damage seedlings. Consider frost protection.' });
+  if (windSpeed > 40)
+    alerts.push({ type:'danger', icon:'💨', title:'Strong Winds', desc:'High winds can damage crops and spread disease spores. Stake tall plants.' });
+  if (alerts.length === 0)
+    alerts.push({ type:'info', icon:'✅', title:'Conditions Favorable', desc:'Weather looks good for crops. Keep scouting your fields as usual.' });
+
+  return alerts;
+}
 
 // GET /api/weather?lat=&lon=
 router.get('/', async (req, res) => {
-  const { lat = -0.2833, lon = 36.0667 } = req.query;
   const apiKey = process.env.OPENWEATHER_API_KEY;
+  if (!apiKey) return res.status(500).json({ success: false, error: 'OpenWeather API key not configured' });
 
-  if (!apiKey) return res.status(500).json({ error: 'Weather API key not configured' });
+  const lat = parseFloat(req.query.lat) || -0.303099; // default Nakuru
+  const lon = parseFloat(req.query.lon) || 36.080026;
 
   try {
     const [currentRes, forecastRes] = await Promise.all([
       axios.get(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`),
-      axios.get(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&cnt=40`)
+      axios.get(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&cnt=56`)
     ]);
 
-    const current = currentRes.data;
-    const forecast = forecastRes.data;
+    const cw = currentRes.data;
+    const fw = forecastRes.data;
 
-    // Build 7-day daily forecast (take midday reading each day)
+    // Current weather
+    const current = {
+      temp:        Math.round(cw.main.temp),
+      feels_like:  Math.round(cw.main.feels_like),
+      humidity:    cw.main.humidity,
+      wind_speed:  Math.round(cw.wind.speed * 3.6), // m/s → km/h
+      description: cw.weather[0].description.charAt(0).toUpperCase() + cw.weather[0].description.slice(1),
+      icon:        weatherIcon(cw.weather[0].main),
+      city:        cw.name,
+      rain_chance: cw.rain ? 80 : 0
+    };
+
+    // 7-day forecast (one entry per day from 3h intervals)
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const dailyMap = {};
-    forecast.list.forEach(item => {
+    fw.list.forEach(item => {
       const date = item.dt_txt.split(' ')[0];
-      const hour = item.dt_txt.split(' ')[1];
-      if (!dailyMap[date] || hour === '12:00:00') dailyMap[date] = item;
+      if (!dailyMap[date]) dailyMap[date] = { temps: [], rains: [], main: item.weather[0].main, day: days[new Date(date).getDay()] };
+      dailyMap[date].temps.push(item.main.temp);
+      dailyMap[date].rains.push(item.pop * 100);
     });
-    const daily = Object.entries(dailyMap).slice(0, 7).map(([date, item]) => ({
-      date,
-      day: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
-      temp: Math.round(item.main.temp),
-      icon: mapWeatherIcon(item.weather[0].main),
-      rain_chance: Math.round((item.pop || 0) * 100),
-      description: item.weather[0].description
+
+    const forecast = Object.values(dailyMap).slice(0, 7).map(d => ({
+      day:         d.day,
+      temp:        Math.round(d.temps.reduce((a,b)=>a+b,0)/d.temps.length),
+      rain_chance: Math.round(Math.max(...d.rains)),
+      icon:        weatherIcon(d.main)
     }));
 
-    // Generate crop-specific alerts based on conditions
-    const alerts = generateCropAlerts(current, forecast.list);
+    const alerts = cropAlerts(cw, cw.main.humidity, cw.wind.speed * 3.6, cw.rain ? 80 : 0);
 
-    res.json({
-      success: true,
-      current: {
-        temp: Math.round(current.main.temp),
-        feels_like: Math.round(current.main.feels_like),
-        description: current.weather[0].description,
-        icon: mapWeatherIcon(current.weather[0].main),
-        humidity: current.main.humidity,
-        wind_speed: Math.round(current.wind.speed * 3.6), // m/s to km/h
-        rain_chance: daily[0]?.rain_chance || 0,
-        city: current.name,
-        country: current.sys.country
-      },
-      forecast: daily,
-      alerts
-    });
-
+    res.json({ success: true, current, forecast, alerts });
   } catch (err) {
     console.error('Weather error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to fetch weather data' });
+    res.status(500).json({ success: false, error: 'Weather fetch failed' });
   }
 });
-
-function mapWeatherIcon(main) {
-  const map = {
-    Clear: '☀️', Clouds: '⛅', Rain: '🌧️',
-    Drizzle: '🌦️', Thunderstorm: '⛈️', Snow: '❄️',
-    Mist: '🌫️', Fog: '🌫️', Haze: '🌫️'
-  };
-  return map[main] || '🌤️';
-}
-
-function generateCropAlerts(current, forecastList) {
-  const alerts = [];
-  const humidity = current.main.humidity;
-  const temp = current.main.temp;
-
-  // Check next 48h for rain
-  const next48h = forecastList.slice(0, 16);
-  const highRainSoon = next48h.some(f => (f.pop || 0) > 0.7);
-  const avgRain = next48h.reduce((s, f) => s + (f.pop || 0), 0) / next48h.length;
-
-  // Blight conditions: high humidity + rain
-  if (humidity > 75 && highRainSoon) {
-    alerts.push({
-      type: 'danger',
-      icon: '🔴',
-      title: 'High Blight Risk — Tomatoes & Potatoes',
-      desc: `Humidity at ${humidity}% with heavy rain expected. Apply copper-based fungicide before rain arrives.`
-    });
-  }
-
-  // Rust conditions: warm nights, dew
-  if (temp > 18 && temp < 28 && humidity > 60) {
-    alerts.push({
-      type: 'warning',
-      icon: '🟡',
-      title: 'Maize Rust Alert',
-      desc: 'Warm temperatures and moderate humidity favor rust development. Scout maize leaves for orange pustules.'
-    });
-  }
-
-  // Good conditions
-  if (humidity < 60 && !highRainSoon) {
-    alerts.push({
-      type: 'info',
-      icon: '🟢',
-      title: 'Good Conditions for Beans & Rice',
-      desc: 'Low disease pressure expected. Ideal time for planting or applying preventive treatments.'
-    });
-  }
-
-  // Drought warning
-  if (humidity < 40 && avgRain < 0.1) {
-    alerts.push({
-      type: 'warning',
-      icon: '🟡',
-      title: 'Dry Spell Warning',
-      desc: 'Very low humidity and no rain forecast. Ensure adequate irrigation to prevent stress-related disease.'
-    });
-  }
-
-  if (alerts.length === 0) {
-    alerts.push({
-      type: 'info',
-      icon: '🟢',
-      title: 'Normal Conditions',
-      desc: 'No major disease risk alerts at the moment. Continue routine scouting and care.'
-    });
-  }
-
-  return alerts;
-}
 
 module.exports = router;
