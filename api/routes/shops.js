@@ -1,12 +1,21 @@
-const express = require('express');
-const router = express.Router();
+const express  = require('express');
+const router   = express.Router();
 const supabase = require('../supabase');
 
-// GET /api/shops?lat=&lon=&radius=20
-router.get('/', async (req, res) => {
-  const { lat, lon, radius = 20 } = req.query;
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
+// GET /api/shops?lat=&lon=
+router.get('/', async (req, res) => {
   try {
+    const lat = parseFloat(req.query.lat) || null;
+    const lon = parseFloat(req.query.lon) || null;
+
     const { data: shops, error } = await supabase
       .from('shops')
       .select('*')
@@ -15,62 +24,55 @@ router.get('/', async (req, res) => {
 
     if (error) throw error;
 
-    // Calculate distance if coordinates provided
-    let results = shops;
-    if (lat && lon) {
-      results = shops
-        .map(shop => ({
-          ...shop,
-          distance_km: haversine(parseFloat(lat), parseFloat(lon), shop.lat, shop.lon)
-        }))
-        .filter(s => s.distance_km <= parseFloat(radius))
-        .sort((a, b) => {
-          // Sponsored first, then by distance
-          if (a.is_sponsored !== b.is_sponsored) return b.is_sponsored - a.is_sponsored;
-          return a.distance_km - b.distance_km;
-        });
-    }
+    // Compute distances and sort
+    const enriched = shops.map(s => ({
+      ...s,
+      distance_km: lat && s.lat ? parseFloat(haversineKm(lat, lon, parseFloat(s.lat), parseFloat(s.lon)).toFixed(1)) : null
+    }));
 
-    res.json({ success: true, shops: results });
+    // Sponsored first, then by distance
+    enriched.sort((a, b) => {
+      if (a.is_sponsored !== b.is_sponsored) return a.is_sponsored ? -1 : 1;
+      if (a.distance_km !== null && b.distance_km !== null) return a.distance_km - b.distance_km;
+      return 0;
+    });
+
+    res.json({ success: true, shops: enriched });
   } catch (err) {
     console.error('Shops error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch shops' });
+    res.status(500).json({ success: false, error: 'Could not load shops' });
   }
 });
 
-// POST /api/shops — Add a new shop
+// POST /api/shops — Add new shop (admin / ad signup)
 router.post('/', async (req, res) => {
-  const { name, address, phone, lat, lon, products, is_sponsored, sponsored_until } = req.body;
-
-  if (!name || !address || !lat || !lon) {
-    return res.status(400).json({ error: 'name, address, lat, lon are required' });
-  }
+  const { name, address, phone, lat, lon, products, ad_package, ad_message } = req.body;
+  if (!name || !address || !lat || !lon)
+    return res.status(400).json({ success: false, error: 'name, address, lat, lon required' });
 
   try {
+    const isSponsored = !!ad_package && ad_package !== 'none';
+    const sponsoredUntil = isSponsored
+      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      : null;
+
     const { data, error } = await supabase.from('shops').insert({
-      name, address, phone, lat, lon,
-      products: products || [],
-      is_sponsored: is_sponsored || false,
-      sponsored_until: sponsored_until || null
+      name, address, phone: phone || null,
+      lat: parseFloat(lat), lon: parseFloat(lon),
+      products:        products || [],
+      is_sponsored:    isSponsored,
+      sponsored_until: sponsoredUntil,
+      ad_package:      ad_package || null,
+      ad_message:      ad_message || null,
+      is_active:       true
     }).select().single();
 
     if (error) throw error;
     res.json({ success: true, shop: data });
   } catch (err) {
     console.error('Add shop error:', err.message);
-    res.status(500).json({ error: 'Failed to add shop' });
+    res.status(500).json({ success: false, error: 'Could not add shop' });
   }
 });
-
-// Haversine formula — distance between two GPS coordinates in km
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat/2)**2 +
-            Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
-  return +(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))).toFixed(1);
-}
-function toRad(deg) { return deg * Math.PI / 180; }
 
 module.exports = router;
